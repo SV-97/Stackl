@@ -1,0 +1,15 @@
+abcd=5.0
+b = 1.0
+if abcd + b >= 3:
+    print(a)
+end
+
+! a
+
+b ! g
+
+if not abcd ! b:
+    print(b)
+end
+
+a !

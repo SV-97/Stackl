@@ -56,10 +56,13 @@ parenthesizedExpr :=
 assignmentExpr :=
     Id Equals expression.
 
-literal :=
-    Id
+literal := # todo add string literal
+    variable
     | number
     | bool.
+
+variable :=
+    Id.
 
 bool :=
     True
@@ -114,3 +117,7 @@ def f(x):
 end
 
 ```
+
+## Parser
+
+Stackl uses a LL(1) Recursive-Descent Parser.

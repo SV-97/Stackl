@@ -9,41 +9,52 @@ Small stack based language
 program :=
     expression*.
 
+expression :=
+    expr.
+
+expr :=
+    orExpr.
+
+orExpr :=
+    andExpr (Or andExpr)*.
+
+andExpr :=
+    compExpr (And compExpr)*.
+
+compExpr :=
+    eqExpr ((Greater | Less | LessOrEq | GreaterOrEq)  eqExpr)*.
+
+eqExpr :=
+    lineExpr ((Equal | NotEqual )  lineExpr)*.
+
+lineExpr :=
+    dotExpr ((Add | Sub) dotExpr)*.
+
+dotExpr :=
+    unaryExpr ((Mul | Div | Mod) unaryExpr)*.
+
+unaryExpr :=
+    (Not | Sub) unaryExpr
+    | primaryExpr.
+
+primaryExpr :=
+    block
+    | parenthesizedExpr
+    | assignmehtExpr
+    | literal.
+
 block :=
     Colon expression+ End
-    | If expression block.
+    | ifExpr.
 
-assignments :=
-    Id Equals expression.
+ifExpr :=
+    If expression block.
 
-expression :=
-    parenthesized
-    | literal
-    | unop
-    | binop
-    | block.
-
-parenthesized :=
+parenthesizedExpr :=
     LPar expression RPar.
 
-binop :=
-    expression (
-        Add
-        | Sub
-        | Mul
-        | Div
-        | Modulo
-        | And
-        | Or
-        | Greater
-        | Less
-        | LessOrEq
-        | GreaterOrEq
-    )
-    expression.
-
-unop :=
-    (Not | Sub) expression.
+assignmentExpr :=
+    Id Equals expression.
 
 literal :=
     Id
@@ -62,6 +73,20 @@ number :=
 ```
 
 There also are *Indentation* tokens that represent two or more spaces.
+
+## Operator Precedence
+
+From strong to weak
+
+| Operators | Associativity |
+|       --- |           --- |
+| `not`, unary `-` | - |
+| `*`, `/`, `%` | Left |
+| `+`, `-` | Left |
+| `==`, `!=` | - |
+| `<`, `>`, `<=`, `>=` | - |
+| `and` | Left |
+| `or` | Left |
 
 ## Example Code
 

@@ -14,6 +14,8 @@ pub enum Tok {
     ScientificFloat, // scientific notation
     Integer,
     Bool,   // True | False
+    True,
+    False,
     Assign, // =
 
     Add, // +
@@ -144,6 +146,12 @@ impl Tokenizer {
         lex
     }
 
+    fn log(&self, span: Span, message: &str, level: Level) {
+        if let Some(l) = &self.logger {
+            l.log(span, message, level);
+        }
+    }
+
     fn span(&self, length: usize) -> Span {
         Span::new(self.pos, length, self.line, self.column)
     }
@@ -181,8 +189,10 @@ impl Tokenizer {
     }
 
     fn indent(&mut self) -> Token {
+        let mut span = self.span(0);
         let n = self.skip_whitespace();
-        Token::new(Tok::Indent(n), self.span(n))
+        span.length = n;
+        Token::new(Tok::Indent(n), span)
     }
 
     /// Create a token of given type width a span length of text and advance once
@@ -217,15 +227,13 @@ impl Tokenizer {
             }
             c => {
                 s.length = 1;
-                if let Some(l) = &self.logger {
-                    let message = if let Some(c) = c {
-                        format!("Expected '=' after '!', got {:?}, inferred '!='.", c)
-                    } else {
-                        "Expected '=' after '!', ended early instead. Did you mean '!='?"
-                            .to_string()
-                    };
-                    l.log(s, &message, Level::Warning);
-                }
+                let message = if let Some(c) = c {
+                    format!("Expected '=' after '!', got {:?}, inferred '!='.", c)
+                } else {
+                    "Expected '=' after '!', ended early instead. Did you mean '!='?"
+                        .to_string()
+                };
+                self.log(s, &message, Level::Warning);
                 let t = Token::new(Tok::NotEqual, s);
                 self.advance();
                 t
@@ -281,16 +289,28 @@ impl Tokenizer {
         let mut length = 0;
         let mut span = self.span(0);
         let mut num_type = Tok::Integer;
+        let mut error_char = None;
         while let Some(c) = self.current_char {
             match c {
                 c if c.is_digit(10) => length += 1,
                 '.' if length > 0 => {
-                    if num_type == Tok::Integer {
-                        num_type = Tok::Float;
+                    match num_type {
+                        Tok::Integer => num_type = Tok::Float,
+                        Tok::Float => {
+                            error_char = Some('.');
+                            length +=1;
+                            break;
+                            },
+                        _ => ()
                     }
                     length += 1;
                 }
                 'e' if length > 0 => {
+                    if num_type == Tok::ScientificFloat {
+                        error_char = Some('e');
+                        length +=1; 
+                        break;
+                    }
                     num_type = Tok::ScientificFloat;
                     length += 1;
                 }
@@ -299,6 +319,21 @@ impl Tokenizer {
             self.advance();
         }
         span.length = length;
+        if let Some(error_char) = error_char {
+            let mut error_span = span;
+            while let Some(c) = self.current_char {
+                if c.is_digit(10) || c == 'e' || c == '.' {
+                    self.advance();
+                    length += 1;
+                } else {
+                    break;
+                }
+            }
+            error_span.length = length;
+            let message = format!("Invalid number literal. Contains multiple {:?}.", error_char);
+            self.log(error_span, &message, Level::Error);
+        }
+
         Token::new(num_type, span)
     }
 
@@ -319,7 +354,8 @@ impl Tokenizer {
             "if" => Token::new(Tok::If, span),
             "else" => Token::new(Tok::Else, span),
             "end" => Token::new(Tok::End, span),
-            "False" | "True" => Token::new(Tok::Bool, span),
+            "false" => Token::new(Tok::False, span),
+            "true" => Token::new(Tok::True, span),
             "not" => Token::new(Tok::Not, span),
             "and" => Token::new(Tok::And, span),
             "or" => Token::new(Tok::Or, span),

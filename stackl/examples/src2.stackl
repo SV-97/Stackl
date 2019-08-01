@@ -4,16 +4,8 @@ if abcd + b >= 3:
     print(a)
 end
 
-a ! b
+c = true
 
-c = 1e10
-d = 1.5.6
-e = 1.5e5
-f = 1ee7
-
-if not abcd != b:
+if not abcd != b and c:
     print(b)
 end
-
-a !
-!

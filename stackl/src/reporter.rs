@@ -42,6 +42,7 @@ impl Logger {
             }
             if c.is_newline() {
                 n = f(n, 1);
+                if n == 0 { break; }
             }
             pos = f(pos.try_into().unwrap(), 1).try_into().unwrap();
         }
@@ -52,14 +53,18 @@ impl Logger {
     fn print_msg(&self, span_error: Span, params: Vec<&dyn AnsiCode>, level: &str, message: &str) {
         let start_pos = self.find_newline(span_error.offset, -1); // find prior newline
         let end_pos = self.find_newline(span_error.offset, 1); // find next newline
-        let span_prior = Span::new(start_pos, span_error.column, span_error.line, 1);
+        let span_prior = Span::new(start_pos + 1, span_error.column - 2, span_error.line, 1);
         let span_after = Span::new(
             span_error.offset + span_error.length,
-            end_pos - (span_error.offset + span_error.length),
+            end_pos.checked_sub(span_error.offset + span_error.length).unwrap_or(0),
             span_error.line,
             span_error.column + span_error.length,
         );
         // print_colored!(error, params!(Color::Red));
+
+        self.source.from_span(&span_prior);
+        self.source.from_span(&span_error);
+        self.source.from_span(&span_after);
 
         let rendered = self.render(span_prior, span_error, span_after, params, level, message);
         println!("\n{}\n", rendered);
@@ -79,9 +84,20 @@ impl Logger {
 
         let line_no = format!("{}", span_error.line);
         let prior = self.source.from_span(&span_prior);
-        let error = colored!("{}", &params, self.source.from_span(&span_error));
         let after = self.source.from_span(&span_after);
-
+        let error = {
+            /*
+            use super::functional::compose;
+            let g: &Fn(_) -> _ = if after.is_empty() { &(|s: &str| s.trim_end()) } else { &(|s| s) };
+            let h: &Fn(_) -> _ = if prior.is_empty() { &(|s: &str| s.trim_start()) } else { &(|s| s) };
+            let raw_error = self.source.from_span(&span_error);
+            colored!("{}", &params, compose(g, h)(&raw_error).to_string())
+            */
+            let raw_error = self.source.from_span(&span_error);
+            let r1 = if after.is_empty() { raw_error.trim_end() } else { &raw_error };
+            let r2 = if prior.is_empty() { raw_error.trim_start() } else { r1 };
+            colored!("{}", &params, r2)
+        };
         let mut header_p = params!(Modifier::Bold);
         header_p.extend(params.clone());
         let mut buf = String::new();
@@ -98,16 +114,17 @@ impl Logger {
         }
         buf.push_str(&colored!("|\n", &aps));
         buf.push_str(&colored!("{}  |  ", &aps, line_no));
+
         buf.push_str(&format!(
             "{}{}{}\n",
-            prior.trim_left(),
+            prior.trim_start(),
             error,
-            after.trim_right()
+            after.trim_end()
         ));
         for _ in 0..indent {
             buf.push(' ');
         }
-        buf.push_str(&colored!("|", &aps));
+        buf.push_str(&colored!("|  ", &aps));
         for _ in 0..span_prior.length {
             buf.push(' ');
         }

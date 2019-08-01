@@ -6,6 +6,7 @@ use super::*;
 use super::reporter::*;
 
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
@@ -13,7 +14,6 @@ pub enum Tok {
     Float,
     ScientificFloat, // scientific notation
     Integer,
-    Bool,   // True | False
     True,
     False,
     Assign, // =
@@ -24,9 +24,16 @@ pub enum Tok {
     Div, // /
     Mod, // %
 
-    Not, // not
-    And, // and
-    Or,  // or
+    Not,   // not
+    And,   // and
+    Or,    // or
+    If,    // if
+    Else,  // else
+    End,   // end
+    Let,   // let
+    Mut,   // mut
+    Comma, // ,
+    Dot,   // .
 
     LPar,
     RPar,
@@ -37,9 +44,6 @@ pub enum Tok {
     Less,      // <
     LessOrEq,  // <=
     GreatOrEq, // >=
-    If,        // if
-    Else,      // else
-    End,       // end
 
     Indent(usize),
     Colon,
@@ -47,13 +51,13 @@ pub enum Tok {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token {
-    pub tok_type: Tok,
+    pub ttype: Tok,
     pub span: Span,
 }
 
 impl Token {
-    pub fn new(tok_type: Tok, span: Span) -> Self {
-        Self { tok_type, span }
+    pub fn new(ttype: Tok, span: Span) -> Self {
+        Self { ttype, span }
     }
 }
 
@@ -62,7 +66,7 @@ impl fmt::Display for Token {
         write!(
             f,
             "<{}> {}",
-            colored!("{:?}", params!(Color::Blue), self.tok_type),
+            colored!("{:?}", params!(Color::Blue), self.ttype),
             colored!("{}", params!(Modifier::Faint), self.span)
         )
     }
@@ -70,25 +74,12 @@ impl fmt::Display for Token {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tokenizer {
-    text: Source,
+    text: Rc<Source>,
     pos: usize,
     line: usize,
     column: usize,
     current_char: Option<char>,
     logger: Option<Logger>,
-}
-
-impl Default for Tokenizer {
-    fn default() -> Self {
-        Self {
-            text: Default::default(),
-            pos: 0,
-            line: 1,
-            column: 1,
-            current_char: None,
-            logger: None,
-        }
-    }
 }
 
 impl Iterator for Tokenizer {
@@ -112,6 +103,16 @@ impl Iterator for Tokenizer {
                 '%' => Some(self.modulo()),
                 '(' => Some(self.left_par()),
                 ')' => Some(self.right_par()),
+                '#' if self.peek() == Some('#') && self.peek_n(2) == Some('#') => {
+                    self.multiline_comment();
+                    self.next()
+                }
+                '#' => {
+                    self.comment();
+                    self.next()
+                }
+                ',' => Some(self.comma()),
+                '.' => Some(self.dot()),
                 c if c.is_newline() => {
                     self.advance();
                     self.next()
@@ -127,7 +128,7 @@ impl Iterator for Tokenizer {
                 }
                 c if c.is_digit(10) => Some(self.number()),
                 c if c.is_alphabetic() || c == '_' => Some(self.identifier()),
-                c => panic!("{:?}", c),
+                c => panic!("Unexpected {:?} at {}", c, self.span(0)),
             }
         } else {
             None
@@ -136,16 +137,35 @@ impl Iterator for Tokenizer {
 }
 
 impl Tokenizer {
-    pub fn new(source: Source, logger: Option<Logger>) -> Self {
-        let mut lex: Self = Default::default();
-        lex.text = source;
-        lex.line = 1;
-        lex.column = 1;
+    pub fn new(source: Rc<Source>, logger: Option<Logger>) -> Self {
+        let mut lex = Self {
+            text: source,
+            pos: 0,
+            line: 1,
+            column: 1,
+            current_char: None,
+            logger,
+        };
         lex.current_char = lex.text.get(0);
-        lex.logger = logger;
         lex
     }
 
+    /// Set new source
+    /// Doesn't reset counters!
+    pub fn set_source(&mut self, source: Rc<Source>) {
+        self.text = source;
+    }
+
+    /// Reset all internal counters, set current char to first char of input
+    pub fn reset(&mut self) {
+        self.pos = 0;
+        self.line = 1;
+        self.column = 1;
+        self.current_char = self.text.get(0);
+    }
+}
+
+impl Tokenizer {
     fn log(&self, span: Span, message: &str, level: Level) {
         if let Some(l) = &self.logger {
             l.log(span, message, level);
@@ -158,6 +178,10 @@ impl Tokenizer {
 
     fn peek(&self) -> Option<char> {
         self.text.get(self.pos + 1)
+    }
+
+    fn peek_n(&self, n: usize) -> Option<char> {
+        self.text.get(self.pos + n)
     }
 
     fn advance(&mut self) {
@@ -196,10 +220,10 @@ impl Tokenizer {
     }
 
     /// Create a token of given type width a span length of text and advance once
-    fn simple(&mut self, tok_type: Tok, text: &str) -> Token {
+    fn simple(&mut self, ttype: Tok, text: &str) -> Token {
         let span = self.span(text.len());
         self.advance();
-        Token::new(tok_type, span)
+        Token::new(ttype, span)
     }
 
     fn colon(&mut self) -> Token {
@@ -230,8 +254,7 @@ impl Tokenizer {
                 let message = if let Some(c) = c {
                     format!("Expected '=' after '!', got {:?}, inferred '!='.", c)
                 } else {
-                    "Expected '=' after '!', ended early instead. Did you mean '!='?"
-                        .to_string()
+                    "Expected '=' after '!', ended early instead. Did you mean '!='?".to_string()
                 };
                 self.log(s, &message, Level::Warning);
                 let t = Token::new(Tok::NotEqual, s);
@@ -285,6 +308,14 @@ impl Tokenizer {
         self.simple(Tok::RPar, ")")
     }
 
+    fn comma(&mut self) -> Token {
+        self.simple(Tok::Comma, ",")
+    }
+
+    fn dot(&mut self) -> Token {
+        self.simple(Tok::Dot, ".")
+    }
+
     fn number(&mut self) -> Token {
         let mut length = 0;
         let mut span = self.span(0);
@@ -298,17 +329,17 @@ impl Tokenizer {
                         Tok::Integer => num_type = Tok::Float,
                         Tok::Float => {
                             error_char = Some('.');
-                            length +=1;
+                            length += 1;
                             break;
-                            },
-                        _ => ()
+                        }
+                        _ => (),
                     }
                     length += 1;
                 }
                 'e' if length > 0 => {
                     if num_type == Tok::ScientificFloat {
                         error_char = Some('e');
-                        length +=1; 
+                        length += 1;
                         break;
                     }
                     num_type = Tok::ScientificFloat;
@@ -330,11 +361,44 @@ impl Tokenizer {
                 }
             }
             error_span.length = length;
-            let message = format!("Invalid number literal. Contains multiple {:?}.", error_char);
+            let message = format!(
+                "Invalid number literal. Contains multiple {:?}.",
+                error_char
+            );
             self.log(error_span, &message, Level::Error);
         }
 
         Token::new(num_type, span)
+    }
+
+    fn multiline_comment(&mut self) {
+        let mut span = self.span(0);
+        for _ in 0..3 {
+            self.advance()
+        }
+        let mut buf = String::new();
+        while let Some(c) = self.current_char {
+            if c == '#' && self.peek() == Some('#') && self.peek_n(2) == Some('#') {
+                for _ in 0..3 {
+                    self.advance()
+                }
+                break;
+            } else {
+                buf.push(c);
+                self.advance()
+            }
+        }
+        span.length = buf.len() + 6; // +6 because of '#'s
+    }
+
+    fn comment(&mut self) {
+        while let Some(c) = self.current_char {
+            if c.is_newline() {
+                break;
+            } else {
+                self.advance()
+            }
+        }
     }
 
     fn identifier(&mut self) -> Token {
@@ -359,6 +423,8 @@ impl Tokenizer {
             "not" => Token::new(Tok::Not, span),
             "and" => Token::new(Tok::And, span),
             "or" => Token::new(Tok::Or, span),
+            "let" => Token::new(Tok::Let, span),
+            "mut" => Token::new(Tok::Mut, span),
             _ => Token::new(Tok::Identifier, span),
         }
     }

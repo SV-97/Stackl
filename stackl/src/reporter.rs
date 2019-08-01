@@ -5,10 +5,11 @@ use super::*;
 
 use std::convert::TryInto;
 use std::io::prelude::*;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Logger {
-    source: Source,
+    source: Rc<Source>,
 }
 
 #[derive(Debug)]
@@ -18,7 +19,7 @@ pub enum Level {
 }
 
 impl Logger {
-    pub fn new(source: Source) -> Self {
+    pub fn new(source: Rc<Source>) -> Self {
         Self { source }
     }
 
@@ -42,7 +43,9 @@ impl Logger {
             }
             if c.is_newline() {
                 n = f(n, 1);
-                if n == 0 { break; }
+                if n == 0 {
+                    break;
+                }
             }
             pos = f(pos.try_into().unwrap(), 1).try_into().unwrap();
         }
@@ -56,7 +59,9 @@ impl Logger {
         let span_prior = Span::new(start_pos + 1, span_error.column - 2, span_error.line, 1);
         let span_after = Span::new(
             span_error.offset + span_error.length,
-            end_pos.checked_sub(span_error.offset + span_error.length).unwrap_or(0),
+            end_pos
+                .checked_sub(span_error.offset + span_error.length)
+                .unwrap_or(0),
             span_error.line,
             span_error.column + span_error.length,
         );
@@ -94,8 +99,16 @@ impl Logger {
             colored!("{}", &params, compose(g, h)(&raw_error).to_string())
             */
             let raw_error = self.source.from_span(&span_error);
-            let r1 = if after.is_empty() { raw_error.trim_end() } else { &raw_error };
-            let r2 = if prior.is_empty() { raw_error.trim_start() } else { r1 };
+            let r1 = if after.is_empty() {
+                raw_error.trim_end()
+            } else {
+                &raw_error
+            };
+            let r2 = if prior.is_empty() {
+                raw_error.trim_start()
+            } else {
+                r1
+            };
             colored!("{}", &params, r2)
         };
         let mut header_p = params!(Modifier::Bold);

@@ -2,6 +2,7 @@ use super::prelude::*;
 use super::tokenizer::{Tok, Token};
 
 use std::convert::TryFrom;
+use std::str::FromStr;
 
 trait NodeVisitor {
     fn visit<T>(node: Node) -> T;
@@ -25,6 +26,13 @@ pub enum NodeType {
     Program {
         expressions: Vec<Node>,
     },
+    IntegerLiteral (i64),
+    FloatLiteral (f64),
+    StringLiteral (String),
+    BoolLiteral (bool),
+    Identifier {
+        name: String
+    }
 }
 
 pub enum BinOp {
@@ -60,6 +68,8 @@ impl Node {
     }
 }
 
+pub type ConversionResult = Result<NodeType, String>;
+
 impl NodeType {
     pub fn program(expressions: Vec<Node>) -> Self {
         NodeType::Program { expressions }
@@ -77,6 +87,26 @@ impl NodeType {
         NodeType::UnaryOp {
             operation,
             val: Box::new(val),
+        }
+    }
+
+    pub fn identifier(name: String) -> Self {
+        NodeType::Identifier { name }
+    }
+
+    pub fn float(value: &str) -> ConversionResult {
+        let parsed = f64::from_str(value);
+        match parsed {
+            Ok(val) => Ok(NodeType::FloatLiteral(val)),
+            Err(e) => Err(format!("Failed conversion of string to float. {:?}", e))
+        }
+    }
+
+    pub fn integer(value: &str) -> ConversionResult {
+        let parsed = i64::from_str(value);
+        match parsed {
+            Ok(val) => Ok(NodeType::IntegerLiteral(val)),
+            Err(e) => Err(format!("Failed conversion of string to integer. {:?}", e))
         }
     }
 }

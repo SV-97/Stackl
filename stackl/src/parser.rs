@@ -5,21 +5,24 @@ use super::tokenizer::*;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::result::Result;
+use std::rc::Rc;
 
-type ParseResult = Result<Node, String>;
+type ParseResult = Result<Node, String>; // Add Option<Span> to Error maybe?
 
 pub struct Parser {
     tokenizer: Tokenizer,
     current_token: Option<Token>,
     token_buffer: VecDeque<Token>,
+    source: Rc<Source>,
 }
 
 impl Parser {
-    pub fn new(tokenizer: Tokenizer) -> Self {
+    pub fn new(tokenizer: Tokenizer, source: Rc<Source>) -> Self {
         let mut parser = Parser {
             tokenizer,
             current_token: None,
             token_buffer: VecDeque::new(),
+            source,
         };
         parser.advance();
         parser
@@ -160,7 +163,7 @@ impl Parser {
                 }) => self.assignment_expr(),
                 _ => self.literal(),
             },
-            _ => Err("Couldn't match primary expression".to_string()),
+            Token { span, .. } => Err(format!("Couldn't match primary expression at {}.", self.source.from_span(&span)))
         }
     }
 
@@ -177,7 +180,35 @@ impl Parser {
     }
 
     fn literal(&mut self) -> ParseResult {
-        unimplemented!()
+        let token = self.current_token.take().ok_or_else(ended_early)?;
+        self.advance();
+        match token {
+            Token { ttype: Tok::Identifier, span } => {
+                let name = self.source.from_span(&span);
+                let node = Node::new(span, NodeType::identifier(name));
+                Ok(node)
+            },
+            Token { ttype: Tok::Float, span }
+            | Token { ttype: Tok::ScientificFloat, span } => {
+                let value = self.source.from_span(&span);
+                let node = Node::new(span, NodeType::float(&value)?);
+                Ok(node)
+            },
+            Token { ttype: Tok::Integer, span } => {
+                let value = self.source.from_span(&span);
+                let node = Node::new(span, NodeType::integer(&value)?);
+                Ok(node)
+            },
+            Token { ttype: Tok::True, span } => {
+                let node = Node::new(span, NodeType::BoolLiteral(true));
+                Ok(node)
+            },
+            Token { ttype: Tok::False, span } => {
+                let node = Node::new(span, NodeType::BoolLiteral(false));
+                Ok(node)
+            },
+            Token { span, .. } => Err(format!("Couldn't match literal value at {}.", self.source.from_span(&span)))
+        }
     }
 }
 

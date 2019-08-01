@@ -65,10 +65,10 @@ impl Default for Source {
 }
 
 impl Source {
-    pub fn new(name:String, text: String) -> Self {
+    pub fn new(name: String, text: String) -> Self {
         let text = text.chars().collect::<Vec<char>>();
         let length = text.len();
-        Self {name, text, length }
+        Self { name, text, length }
     }
 
     pub fn from_span(&self, span: &Span) -> String {

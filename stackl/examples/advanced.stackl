@@ -27,3 +27,8 @@ end
 
 mut a = 1.0
 a -= : b += 5 end
+
+### This is a multiline comment
+Ayow you wanker
+multiline that shit
+###

@@ -1,5 +1,5 @@
 use super::prelude::*;
-use super::tokenizer::{Tok, Token};
+use super::tokenizer::Tok;
 
 use std::convert::TryFrom;
 use std::str::FromStr;
@@ -8,11 +8,13 @@ trait NodeVisitor {
     fn visit<T>(node: Node) -> T;
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
-    span: Span,
+    pub span: Span,
     node: NodeType,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum NodeType {
     BinaryOp {
         operation: BinOp,
@@ -26,15 +28,31 @@ pub enum NodeType {
     Program {
         expressions: Vec<Node>,
     },
-    IntegerLiteral (i64),
-    FloatLiteral (f64),
-    StringLiteral (String),
-    BoolLiteral (bool),
+    IntegerLiteral(i64),
+    FloatLiteral(f64),
+    StringLiteral(String),
+    BoolLiteral(bool),
     Identifier {
-        name: String
-    }
+        name: String,
+    },
+    Assignment {
+        left_val: Box<Node>,
+        right_val: Box<Node>,
+    },
+    Expression {
+        expression: Box<Node>,
+    },
+    Block {
+        expressions: Vec<Node>,
+    },
+    If {
+        condition: Box<Node>,
+        if_true: Option<Box<Node>>, // not currently used but may but useful for something like rubys `unless`
+        if_false: Option<Box<Node>>,
+    },
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum BinOp {
     Add,
     Sub,
@@ -43,8 +61,13 @@ pub enum BinOp {
     Mod,
     And,
     Or,
+    Greater,
+    Less,
+    LessOrEq,
+    GreaterOrEq,
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum UnOp {
     Not,
     Minus,
@@ -65,6 +88,10 @@ impl TryFrom<Tok> for UnOp {
 impl Node {
     pub fn new(span: Span, node: NodeType) -> Self {
         Node { span, node }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
     }
 }
 
@@ -98,7 +125,7 @@ impl NodeType {
         let parsed = f64::from_str(value);
         match parsed {
             Ok(val) => Ok(NodeType::FloatLiteral(val)),
-            Err(e) => Err(format!("Failed conversion of string to float. {:?}", e))
+            Err(e) => Err(format!("Failed conversion of string to float. {:?}", e)),
         }
     }
 
@@ -106,7 +133,34 @@ impl NodeType {
         let parsed = i64::from_str(value);
         match parsed {
             Ok(val) => Ok(NodeType::IntegerLiteral(val)),
-            Err(e) => Err(format!("Failed conversion of string to integer. {:?}", e))
+            Err(e) => Err(format!("Failed conversion of string to integer. {:?}", e)),
+        }
+    }
+
+    pub fn assignment(left_val: Node, right_val: Node) -> Self {
+        NodeType::Assignment {
+            left_val: Box::new(left_val),
+            right_val: Box::new(right_val),
+        }
+    }
+
+    pub fn expression(expression: Node) -> Self {
+        NodeType::Expression {
+            expression: Box::new(expression),
+        }
+    }
+
+    pub fn block(expressions: Vec<Node>) -> Self {
+        NodeType::Block {
+            expressions
+        }
+    }
+
+    pub fn if_expression(condition: Node, if_true: Option<Node>, if_false: Option<Node>) -> Self {
+        NodeType::If {
+            condition: Box::new(condition),
+            if_true: if_true.map(Box::new),
+            if_false: if_false.map(Box::new),
         }
     }
 }

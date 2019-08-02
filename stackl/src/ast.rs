@@ -52,7 +52,7 @@ pub enum NodeType {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum BinOp {
     Add,
     Sub,
@@ -65,12 +65,37 @@ pub enum BinOp {
     Less,
     LessOrEq,
     GreaterOrEq,
+    Equal,
+    NotEqual,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum UnOp {
     Not,
     Minus,
+}
+
+impl TryFrom<Tok> for BinOp {
+    type Error = String;
+
+    fn try_from(tok: Tok) -> Result<Self, Self::Error> {
+        match tok {
+            Tok::Add => Ok(BinOp::Add),
+            Tok::Sub => Ok(BinOp::Sub),
+            Tok::Mul => Ok(BinOp::Mul),
+            Tok::Div => Ok(BinOp::Div),
+            Tok::Mod => Ok(BinOp::Mod),
+            Tok::And => Ok(BinOp::And),
+            Tok::Or => Ok(BinOp::Or),
+            Tok::Greater => Ok(BinOp::Greater),
+            Tok::Less => Ok(BinOp::Less),
+            Tok::GreatOrEq => Ok(BinOp::GreaterOrEq),
+            Tok::LessOrEq => Ok(BinOp::LessOrEq),
+            Tok::Equal => Ok(BinOp::Equal),
+            Tok::NotEqual => Ok(BinOp::NotEqual),
+            _ => Err("Invalid binary operation".to_string())
+        }
+    }
 }
 
 impl TryFrom<Tok> for UnOp {
@@ -151,9 +176,7 @@ impl NodeType {
     }
 
     pub fn block(expressions: Vec<Node>) -> Self {
-        NodeType::Block {
-            expressions
-        }
+        NodeType::Block { expressions }
     }
 
     pub fn if_expression(condition: Node, if_true: Option<Node>, if_false: Option<Node>) -> Self {

@@ -39,13 +39,13 @@ unaryExpr :=
 
 primaryExpr :=
     block
+    | ifExpr
     | parenthesizedExpr
     | assignmehtExpr
     | literal.
 
 block :=
-    Colon expression+ End
-    | ifExpr.
+    Colon expression+ End.
 
 ifExpr :=
     If expression block.

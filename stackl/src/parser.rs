@@ -2,18 +2,28 @@ use super::ast::*;
 use super::prelude::*;
 use super::tokenizer::*;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::convert::TryFrom;
 use std::rc::Rc;
 use std::result::Result;
 
 type ParseResult = Result<Node, String>; // Add Option<Span> to Error maybe?
 
+static comparison_ops: [BinOp; 4] = [
+    BinOp::Greater,
+    BinOp::GreaterOrEq,
+    BinOp::Less,
+    BinOp::LessOrEq,
+];
+static equality_ops: [BinOp; 2] = [BinOp::Equal, BinOp::NotEqual];
+
 pub struct Parser {
     tokenizer: Tokenizer,
     current_token: Option<Token>,
     token_buffer: VecDeque<Token>,
     source: Rc<Source>,
+    comparison_ops: HashSet<BinOp>,
+    equality_ops: HashSet<BinOp>,
 }
 
 impl Parser {
@@ -23,6 +33,8 @@ impl Parser {
             current_token: None,
             token_buffer: VecDeque::new(),
             source,
+            comparison_ops: comparison_ops.iter().cloned().collect::<HashSet<BinOp>>(),
+            equality_ops: equality_ops.iter().cloned().collect::<HashSet<BinOp>>(),
         };
         parser.advance();
         parser
@@ -82,41 +94,54 @@ impl Parser {
     }
 }
 
-/*
-impl Parser { // higher order parsing stuff
-    fn binop(&mut self,
-        mut left_expr_f: impl FnMut(&mut Self) -> ParseResult,
-        mut right_expr_f: impl FnMut(&mut Self) -> ParseResult,
-        mut tok_to_binop: HashMap<Tok, BinOp>
-        ) -> ParseResult {
-        let mut left_expr = left_expr_f(self)?;
+#[allow(dead_code)]
+impl Parser {
+    // higher order parsing stuff
+    fn binop(
+        &mut self,
+        mut left_expression: impl FnMut(&mut Self) -> ParseResult,
+        mut right_expression: impl FnMut(&mut Self) -> ParseResult,
+        validation_set: &HashSet<BinOp>,
+    ) -> ParseResult {
+        let mut left_expr = left_expression(self)?;
         loop {
             let token = self.take_token()?;
-            let mut build_operation = |binop: BinOp, left_expr: Node| -> ParseResult {
+            let mut build_operation = |binop: BinOp| -> ParseResult {
                 self.advance();
-                let right = right_expr_f(self);
+                let right = right_expression(self);
                 match right {
                     Ok(right_expr) => {
                         let span = Span::between(&left_expr.span(), &right_expr.span());
-                        let binary_operation = NodeType::binary_operation(binop, left_expr, right_expr);
+                        let binary_operation =
+                            NodeType::binary_operation(binop, left_expr.clone(), right_expr); // clone here may be expensive
                         let node = Node::new(span, binary_operation);
                         Ok(node)
-                    },
-                    Err(_) => return Err(format!("Failed to construct binary operation - expression. Right value is no valid expression."))
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                        "Failed to construct line expression. Right value is no valid expression."
+                    ))
+                    }
                 }
             };
-            let tok = token.ttype;
-            let mapping = tok_to_binop.remove(&tok);
-            let operation = match mapping {
-                Some(m) => build_operation(m, left_expr)?,
-                None => break
-            };
-            left_expr = operation;
+            let ttype = token.ttype;
+            let operation = BinOp::try_from(ttype).ok();
+            if let Some(op) = operation {
+                if !validation_set.contains(&op) {
+                    self.put_back(token);
+                    break;
+                } else {
+                    let operation_node = build_operation(op)?;
+                    left_expr = operation_node;
+                }
+            } else {
+                self.put_back(token);
+                break;
+            }
         }
         Ok(left_expr)
     }
 }
-*/
 
 impl Parser {
     // Productions
@@ -147,21 +172,91 @@ impl Parser {
     }
 
     fn and_expr(&mut self) -> ParseResult {
-        let mut _l = self.comparison_expr();
-        // todo
-        unimplemented!()
+        let mut left_expr = self.comparison_expr()?;
+        loop {
+            let token = self.take_token()?;
+            let mut build_operation = |binop: BinOp| -> ParseResult {
+                self.advance();
+                let right = self.comparison_expr();
+                match right {
+                    Ok(right_expr) => {
+                        let span = Span::between(&left_expr.span(), &right_expr.span());
+                        let binary_operation =
+                            NodeType::binary_operation(binop, left_expr.clone(), right_expr); // clone here may be expensive
+                        let node = Node::new(span, binary_operation);
+                        Ok(node)
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                        "Failed to construct line expression. Right value is no valid expression."
+                    ))
+                    }
+                }
+            };
+            let operation = match token {
+                Token {
+                    ttype: Tok::Add, ..
+                } => build_operation(BinOp::Add).ok(),
+                Token {
+                    ttype: Tok::Sub, ..
+                } => build_operation(BinOp::Sub).ok(),
+                _ => None,
+            };
+            if let Some(op) = operation {
+                left_expr = op;
+            } else {
+                break;
+            }
+        }
+        Ok(left_expr)
     }
 
     fn comparison_expr(&mut self) -> ParseResult {
-        let mut _l = self.equality_expr();
-        // todo
-        unimplemented!()
+        let left_expr = self.line_expr()?;
+        if self.current_token.is_some() {
+            let token = self.take_token().unwrap();
+            self.advance();
+            let ttype = token.ttype;
+            let operation = BinOp::try_from(ttype).ok();
+            if let Some(op) = operation {
+                if !self.comparison_ops.contains(&op) {
+                    return Ok(left_expr);
+                }
+                let right_expr = self.line_expr()?;
+                let span = Span::between(&left_expr.span(), &right_expr.span());
+                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
+                Ok(node)
+            } else {
+                self.put_back(token);
+                Ok(left_expr)
+            }
+        } else {
+            Ok(left_expr)
+        }
     }
 
     fn equality_expr(&mut self) -> ParseResult {
-        let mut _l = self.line_expr();
-        // todo
-        unimplemented!()
+        let left_expr = self.line_expr()?;
+        if self.current_token.is_some() {
+            let token = self.take_token().unwrap();
+            self.advance();
+            let ttype = token.ttype;
+            let operation = BinOp::try_from(ttype).ok();
+            if let Some(op) = operation {
+                if !self.equality_ops.contains(&op) {
+                    return Ok(left_expr);
+                }
+                let right_expr = self.line_expr()?;
+                let span = Span::between(&left_expr.span(), &right_expr.span());
+                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
+                Ok(node)
+            } else {
+                self.put_back(token);
+                Ok(left_expr)
+            }
+        } else {
+            Ok(left_expr)
+        }
     }
 
     fn line_expr(&mut self) -> ParseResult {
@@ -175,13 +270,15 @@ impl Parser {
                     Ok(right_expr) => {
                         let span = Span::between(&left_expr.span(), &right_expr.span());
                         let binary_operation =
-                            NodeType::binary_operation(binop, left_expr.clone(), right_expr);
+                            NodeType::binary_operation(binop, left_expr.clone(), right_expr); // clone here may be expensive
                         let node = Node::new(span, binary_operation);
                         Ok(node)
                     }
-                    Err(_) => return Err(format!(
+                    Err(_) => {
+                        return Err(format!(
                         "Failed to construct line expression. Right value is no valid expression."
-                    )),
+                    ))
+                    }
                 }
             };
             let operation = match token {
@@ -203,8 +300,46 @@ impl Parser {
     }
 
     fn dot_expr(&mut self) -> ParseResult {
-        let mut _l = self.unary_expr();
-        unimplemented!()
+        let mut left_expr = self.unary_expr()?;
+        loop {
+            let token = self.take_token()?;
+            let mut build_operation = |binop: BinOp| -> ParseResult {
+                self.advance();
+                let right = self.unary_expr();
+                match right {
+                    Ok(right_expr) => {
+                        let span = Span::between(&left_expr.span(), &right_expr.span());
+                        let binary_operation =
+                            NodeType::binary_operation(binop, left_expr.clone(), right_expr);
+                        let node = Node::new(span, binary_operation);
+                        Ok(node)
+                    }
+                    Err(_) => {
+                        return Err(format!(
+                        "Failed to construct dot expression. Right value is no valid expression."
+                    ))
+                    }
+                }
+            };
+            let operation = match token {
+                Token {
+                    ttype: Tok::Mul, ..
+                } => build_operation(BinOp::Mul).ok(),
+                Token {
+                    ttype: Tok::Div, ..
+                } => build_operation(BinOp::Div).ok(),
+                Token {
+                    ttype: Tok::Mod, ..
+                } => build_operation(BinOp::Mod).ok(),
+                _ => None,
+            };
+            if let Some(op) = operation {
+                left_expr = op;
+            } else {
+                break;
+            }
+        }
+        Ok(left_expr)
     }
 
     fn unary_expr(&mut self) -> ParseResult {

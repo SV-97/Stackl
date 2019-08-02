@@ -10,6 +10,7 @@ mod reporter;
 mod shell;
 
 use fancyterm::*;
+use parser::*;
 use prelude::*;
 use reporter::*;
 use shell::Shell;
@@ -53,7 +54,8 @@ fn handle_repl() {
     repl.set_ansi(params!(), params!(Color::Blue, Modifier::Faint), params!());
 
     let source = Rc::new(Source::new("Interactive".to_string(), "".to_string()));
-    let mut tokens = Tokenizer::new(source, None);
+    let mut tokens = Tokenizer::new(Rc::clone(&source), None);
+    let mut parser = Parser::new(tokens, Rc::clone(&source));
     for input in 0.. {
         repl.set_seperators(
             &format!("In[{:?}]: ", input),
@@ -61,16 +63,12 @@ fn handle_repl() {
         );
         let text = repl.read();
         let source = Rc::new(Source::new("Interactive".to_string(), text));
+        tokens = parser.get_tokenizer();
         tokens.set_source(Rc::clone(&source));
         tokens.reset();
-        for tok in tokens.clone() {
-            repl.writeln(format!(
-                "{}{} {:?}",
-                tok,
-                colored!(":", params!(Modifier::Faint)),
-                source.from_span(&tok.span)
-            ));
-        }
+        parser = Parser::new(tokens, Rc::clone(&source));
+
+        repl.writeln(format!("{:?}", parser.parse()));
     }
 }
 

@@ -8,7 +8,7 @@ use super::reporter::*;
 use std::fmt;
 use std::rc::Rc;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Tok {
     Identifier,
     Float,

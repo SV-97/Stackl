@@ -22,10 +22,10 @@ andExpr :=
     compExpr (And compExpr)*.
 
 compExpr :=
-    eqExpr ((Greater | Less | LessOrEq | GreaterOrEq)  eqExpr)*.
+    eqExpr ((Greater | Less | LessOrEq | GreaterOrEq)  eqExpr)?.
 
 eqExpr :=
-    lineExpr ((Equal | NotEqual )  lineExpr)*.
+    lineExpr ((Equal | NotEqual )  lineExpr)?.
 
 lineExpr :=
     dotExpr ((Add | Sub) dotExpr)*.

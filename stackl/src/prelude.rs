@@ -19,6 +19,24 @@ impl Span {
             column,
         }
     }
+
+    pub fn between(from: &Self, to: &Self) -> Self {
+        let start = from.offset;
+        let length = (to.offset + to.length) - start;
+        let (line, column) = (from.line, from.column);
+        Self::new(start, length, line, column)
+    }
+}
+
+impl Default for Span {
+    fn default() -> Self {
+        Self {
+            offset: usize::default(),
+            length: usize::default(),
+            line: usize::default(),
+            column: usize::default(),
+        }
+    }
 }
 
 impl fmt::Display for Span {

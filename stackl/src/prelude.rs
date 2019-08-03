@@ -2,6 +2,12 @@ use std::convert;
 use std::fmt;
 use std::ops::Range;
 
+pub type ErrorRecord = (String, Option<Span>); // maybe make this an actual struct/enum and implement From<String> for it
+
+pub fn error<T>(message: String, span: Option<Span>) -> Result<T, (String, Option<Span>)> {
+    Err((message, span))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Span {
     pub offset: usize,

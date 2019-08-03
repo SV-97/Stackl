@@ -98,4 +98,8 @@ impl Source {
     pub fn get(&self, index: usize) -> Option<char> {
         self.text.get(index).copied()
     }
+
+    pub fn end(&self) -> Span {
+        Span::new(self.length, 0, 0, 0)
+    }
 }

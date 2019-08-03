@@ -16,6 +16,7 @@ pub struct Logger {
 pub enum Level {
     Warning,
     Error,
+    Information,
 }
 
 impl Logger {
@@ -56,7 +57,12 @@ impl Logger {
     fn print_msg(&self, span_error: Span, params: Vec<&dyn AnsiCode>, level: &str, message: &str) {
         let start_pos = self.find_newline(span_error.offset, -1); // find prior newline
         let end_pos = self.find_newline(span_error.offset, 1); // find next newline
-        let span_prior = Span::new(start_pos + 1, span_error.column - 2, span_error.line, 1);
+        let span_prior = Span::new(
+            start_pos + 1,
+            span_error.column.checked_sub(2).unwrap_or(0),
+            span_error.line,
+            1,
+        );
         let span_after = Span::new(
             span_error.offset + span_error.length,
             end_pos
@@ -153,6 +159,7 @@ impl Logger {
         let (level, params) = match level {
             Level::Warning => ("Warning", params!(Color::Yellow, Modifier::Bold)),
             Level::Error => ("Error", params!(Color::Red, Modifier::Bold)),
+            Level::Information => ("Information", params!(Color::Cyan, Modifier::Bold)),
         };
         self.print_msg(span, params, level, message);
     }

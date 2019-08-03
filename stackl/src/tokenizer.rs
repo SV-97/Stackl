@@ -1,6 +1,5 @@
 use super::prelude::*;
 
-#[macro_use]
 use super::*;
 
 use super::reporter::*;
@@ -79,7 +78,7 @@ pub struct Tokenizer {
     line: usize,
     column: usize,
     current_char: Option<char>,
-    logger: Option<Logger>,
+    logger: Option<Rc<Logger>>,
 }
 
 impl Iterator for Tokenizer {

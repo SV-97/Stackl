@@ -1,5 +1,3 @@
-#[macro_use]
-#[allow(dead_code)]
 use std::fmt::{Debug, Display};
 
 pub trait AnsiCode {
@@ -160,6 +158,7 @@ macro_rules! println_colored {
 macro_rules! params {
     ( $($item:expr),* ) => {
         {
+            #[allow(unused_mut)]
             let mut v: Vec<&dyn AnsiCode> = Vec::new();
             $(
                 v.push(&$item);

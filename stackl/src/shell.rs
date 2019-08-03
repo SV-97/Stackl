@@ -1,5 +1,4 @@
 use super::fancyterm::*;
-use super::prelude::*;
 
 use std::io;
 use std::io::Write;
@@ -18,6 +17,7 @@ pub struct Shell<'a> {
     name_ansi: Vec<&'a dyn AnsiCode>,
 }
 
+#[allow(dead_code)]
 impl<'a> Shell<'a> {
     /// Constructor for new shells with default seperators
     /// in_seperator defaults to ">>> "

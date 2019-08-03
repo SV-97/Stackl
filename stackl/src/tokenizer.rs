@@ -119,7 +119,8 @@ impl Iterator for Tokenizer {
                 c if c.is_whitespace() // if at least two whitespace characters in succession
                     && self.peek().map(|c| c.is_whitespace()).unwrap_or(false) =>
                 {
-                    Some(self.indent())
+                    let _ = Some(self.indent()); // indent's skipped out for now
+                    self.next()
                 }
                 c if c.is_whitespace() => {
                     self.skip_whitespace();
@@ -135,8 +136,22 @@ impl Iterator for Tokenizer {
     }
 }
 
+impl Drop for Tokenizer {
+    fn drop(&mut self) {
+        if let Some(logger) = self.logger.take() {
+            self.next().map(|tok| {
+                logger.log(
+                    tok.span,
+                    &format!("Didn't use token {:?} or any of the ones behind it.", tok),
+                    Level::Information,
+                )
+            });
+        }
+    }
+}
+
 impl Tokenizer {
-    pub fn new(source: Rc<Source>, logger: Option<Logger>) -> Self {
+    pub fn new(source: Rc<Source>, logger: Option<Rc<Logger>>) -> Self {
         let mut lex = Self {
             text: source,
             pos: 0,

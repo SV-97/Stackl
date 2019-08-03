@@ -1,5 +1,6 @@
 use super::ast::*;
 use super::prelude::*;
+use super::reporter::*;
 use super::tokenizer::*;
 
 use std::collections::{HashSet, VecDeque};
@@ -7,23 +8,25 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::result::Result;
 
-type ParseResult = Result<Node, String>; // Add Option<Span> to Error maybe?
+type ParseResult = Result<Node, ErrorRecord>;
 
-static comparison_ops: [BinOp; 4] = [
+static COMPARISON_OPS: [BinOp; 4] = [
     BinOp::Greater,
     BinOp::GreaterOrEq,
     BinOp::Less,
     BinOp::LessOrEq,
 ];
-static equality_ops: [BinOp; 2] = [BinOp::Equal, BinOp::NotEqual];
-static line_ops: [BinOp; 2] = [BinOp::Add, BinOp::Sub];
-static dot_ops: [BinOp; 3] = [BinOp::Mul, BinOp::Div, BinOp::Mod];
+static EQUALITY_OPS: [BinOp; 2] = [BinOp::Equal, BinOp::NotEqual];
+static LINE_OPS: [BinOp; 2] = [BinOp::Add, BinOp::Sub];
+static DOT_OPS: [BinOp; 3] = [BinOp::Mul, BinOp::Div, BinOp::Mod];
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
     tokenizer: Tokenizer,
     current_token: Option<Token>,
     token_buffer: VecDeque<Token>,
     source: Rc<Source>,
+    logger: Option<Rc<Logger>>,
     comparison_set: HashSet<BinOp>,
     equality_set: HashSet<BinOp>,
     line_set: HashSet<BinOp>,
@@ -33,7 +36,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(tokenizer: Tokenizer, source: Rc<Source>) -> Self {
+    pub fn new(tokenizer: Tokenizer, source: Rc<Source>, logger: Option<Rc<Logger>>) -> Self {
         let mut or_set = HashSet::new();
         or_set.insert(BinOp::Or);
         let mut and_set = HashSet::new();
@@ -43,10 +46,11 @@ impl Parser {
             current_token: None,
             token_buffer: VecDeque::new(),
             source,
-            comparison_set: comparison_ops.iter().cloned().collect::<HashSet<BinOp>>(),
-            equality_set: equality_ops.iter().cloned().collect::<HashSet<BinOp>>(),
-            line_set: line_ops.iter().cloned().collect::<HashSet<BinOp>>(),
-            dot_set: dot_ops.iter().cloned().collect::<HashSet<BinOp>>(),
+            logger,
+            comparison_set: COMPARISON_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
+            equality_set: EQUALITY_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
+            line_set: LINE_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
+            dot_set: DOT_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
             or_set,
             and_set,
         };
@@ -103,12 +107,12 @@ impl Parser {
         }
     }
 
-    fn push_front(&mut self, tok: Token) {
-        self.token_buffer.push_front(tok);
-    }
-
-    fn take_token(&mut self) -> Result<Token, String> {
-        self.current_token.take().ok_or_else(ended_early)
+    fn take_token(&mut self) -> Result<Token, ErrorRecord> {
+        self.current_token.take().ok_or_else(|| {
+            let msg = ended_early();
+            let span = self.source.end();
+            (msg, Some(span))
+        })
     }
 }
 
@@ -137,16 +141,15 @@ impl Parser {
                             let node = Node::new(span, binary_operation);
                             Ok(node)
                         }
-                        Err(_) => {
-                            return Err(format!(
-                            "Failed to construct line expression. Right value is no valid expression."
-                        ))
+                        Err((_, span)) => {
+                            return error("Failed to construct line expression. Right value is no valid expression.".to_string(), span)
                         }
                     }
                 };
                 let ttype = token.ttype;
-                let operation = BinOp::try_from(ttype).ok();
+                let operation = dbg!(BinOp::try_from(ttype).ok());
                 if let Some(op) = operation {
+                    dbg!(validation_set(self));
                     if !validation_set(self).contains(&op) {
                         self.put_back(token);
                         break;
@@ -174,7 +177,10 @@ impl Parser {
         loop {
             match self.expression() {
                 Ok(node) => expressions.push(node),
-                Err(e) => {
+                Err((message, span)) => {
+                    if let Some(logger) = &self.logger {
+                        logger.log(span.unwrap(), &message, Level::Error);
+                    }
                     // println!("Encountered Error in expression: {}", e);
                     break;
                 }
@@ -217,13 +223,14 @@ impl Parser {
         let left_expr = self.equality_expr()?;
         if self.current_token.is_some() {
             let token = self.take_token().unwrap();
-            self.advance();
-            let ttype = token.ttype;
-            let operation = BinOp::try_from(ttype).ok();
+            let ttype = dbg!(token.ttype);
+            let operation = dbg!(BinOp::try_from(ttype).ok());
             if let Some(op) = operation {
                 if !self.comparison_set.contains(&op) {
+                    self.put_back(token);
                     return Ok(left_expr);
                 }
+                self.advance();
                 let right_expr = self.equality_expr()?;
                 let span = Span::between(&left_expr.span(), &right_expr.span());
                 let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
@@ -241,13 +248,14 @@ impl Parser {
         let left_expr = self.line_expr()?;
         if self.current_token.is_some() {
             let token = self.take_token().unwrap();
-            self.advance();
             let ttype = token.ttype;
             let operation = BinOp::try_from(ttype).ok();
             if let Some(op) = operation {
                 if !self.equality_set.contains(&op) {
+                    self.put_back(token);
                     return Ok(left_expr);
                 }
+                self.advance();
                 let right_expr = self.line_expr()?;
                 let span = Span::between(&left_expr.span(), &right_expr.span());
                 let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
@@ -351,16 +359,18 @@ impl Parser {
                 self.put_back(tok);
                 self.literal()
             }
-            Token { span, .. } => Err(format!(
-                "Couldn't match primary expression at {}.",
-                self.source.from_span(&span)
-            )),
+            tok @ Token { .. } => {
+                let span = tok.span;
+                self.put_back(tok);
+                error("Couldn't match primary expression.".to_string(), Some(span))
+            }
         }
     }
 
     fn if_expression(&mut self) -> ParseResult {
         // todo: add else and maybe unless
         let if_tok = self.take_token()?;
+        self.advance();
         let condition = self.expression()?;
         let block = self.block()?;
         let span = Span::between(&if_tok.span, &block.span());
@@ -370,6 +380,7 @@ impl Parser {
 
     fn block(&mut self) -> ParseResult {
         let colon = self.take_token()?;
+        self.advance();
         let mut expressions = Vec::new();
         while let Ok(expression) = self.expression() {
             expressions.push(expression);
@@ -423,6 +434,7 @@ impl Parser {
 
     fn literal(&mut self) -> ParseResult {
         let token = self.take_token()?;
+        self.advance();
         match token {
             Token {
                 ttype: Tok::Identifier,
@@ -466,10 +478,7 @@ impl Parser {
                 let node = Node::new(span, NodeType::BoolLiteral(false));
                 Ok(node)
             }
-            Token { span, .. } => Err(format!(
-                "Couldn't match literal value at {}.",
-                self.source.from_span(&span)
-            )),
+            Token { span, .. } => error("Couldn't match literal value.".to_string(), Some(span)),
         }
     }
 }
@@ -478,9 +487,12 @@ fn ended_early() -> String {
     "Output ended early".to_string()
 }
 
-fn unexpected<T>(expected: Tok, got_instead: Token) -> Result<T, String> {
-    Err(format!(
-        "Couldn't match block expression at {}: Expected {:?}, got {:?} instead",
-        got_instead.span, expected, got_instead
-    ))
+fn unexpected<T>(expected: Tok, got_instead: Token) -> Result<T, (String, Option<Span>)> {
+    error(
+        format!(
+            "Couldn't match block expression: Expected {:?}, got {:?} instead",
+            expected, got_instead
+        ),
+        Some(got_instead.span),
+    )
 }

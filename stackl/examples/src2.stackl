@@ -1,4 +1,4 @@
-abcd=5.0
+abcd = 5.0 + 10
 b = 1.0
 if abcd + b >= 3:
     print(a)

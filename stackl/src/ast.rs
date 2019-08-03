@@ -3,15 +3,16 @@ use super::tokenizer::Tok;
 
 use std::convert::TryFrom;
 use std::str::FromStr;
+use std::fmt;
 
-trait NodeVisitor {
-    fn visit<T>(node: Node) -> T;
+pub trait NodeVisitor<T> {
+    fn visit(&mut self, root: &Node) -> T;
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub span: Span,
-    node: NodeType,
+    pub node: NodeType,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +51,7 @@ pub enum NodeType {
         if_true: Option<Box<Node>>, // not currently used but may but useful for something like rubys `unless`
         if_false: Option<Box<Node>>,
     },
+    Empty
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
@@ -69,6 +71,45 @@ pub enum BinOp {
     NotEqual,
 }
 
+impl fmt::Display for BinOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use BinOp::*;
+        write!(
+            f,
+            "{}",
+            match self {
+                Add => "+",
+                Sub => "-",
+                Mul => "*",
+                Div => "/",
+                Mod => "%",
+                And => "and",
+                Or => "or",
+                Equal => "==",
+                NotEqual => "!=",
+                Greater => ">",
+                Less => "<",
+                LessOrEq => "<=",
+                GreaterOrEq => ">=",
+            }
+        )
+    }
+}
+
+impl fmt::Display for UnOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use UnOp::*;
+        write!(
+            f,
+            "{}",
+            match self {
+                Not => "not",
+                Minus => "-",
+            }
+        )
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub enum UnOp {
     Not,
@@ -76,7 +117,7 @@ pub enum UnOp {
 }
 
 impl TryFrom<Tok> for BinOp {
-    type Error = String;
+    type Error = ErrorRecord;
 
     fn try_from(tok: Tok) -> Result<Self, Self::Error> {
         match tok {
@@ -93,22 +134,38 @@ impl TryFrom<Tok> for BinOp {
             Tok::LessOrEq => Ok(BinOp::LessOrEq),
             Tok::Equal => Ok(BinOp::Equal),
             Tok::NotEqual => Ok(BinOp::NotEqual),
-            _ => Err("Invalid binary operation".to_string())
+            _ => error("Invalid binary operation".to_string(), None),
         }
     }
 }
 
 impl TryFrom<Tok> for UnOp {
-    type Error = String;
+    type Error = ErrorRecord;
 
     fn try_from(tok: Tok) -> Result<Self, Self::Error> {
         match tok {
             Tok::Not => Ok(UnOp::Not),
             Tok::Sub => Ok(UnOp::Minus),
-            x => Err(format!("Failed conversion of Token {:?} to ast::UnOp", x)),
+            x => error(
+                format!("Failed conversion of Token {:?} to ast::UnOp", x),
+                None,
+            ),
         }
     }
 }
+
+impl Default for NodeType {
+    fn default() -> Self {
+        NodeType::Empty
+    }
+}
+
+impl Default for Node {
+    fn default() -> Self {
+        Node::new(Span::default(), NodeType::default())
+    }
+}
+
 
 impl Node {
     pub fn new(span: Span, node: NodeType) -> Self {
@@ -118,9 +175,13 @@ impl Node {
     pub fn span(&self) -> Span {
         self.span
     }
+
+    pub fn node_type(&self) -> &NodeType {
+        &self.node
+    }
 }
 
-pub type ConversionResult = Result<NodeType, String>;
+pub type ConversionResult = Result<NodeType, ErrorRecord>;
 
 impl NodeType {
     pub fn program(expressions: Vec<Node>) -> Self {
@@ -150,7 +211,10 @@ impl NodeType {
         let parsed = f64::from_str(value);
         match parsed {
             Ok(val) => Ok(NodeType::FloatLiteral(val)),
-            Err(e) => Err(format!("Failed conversion of string to float. {:?}", e)),
+            Err(e) => error(
+                format!("Failed conversion of string to float. {:?}", e),
+                None,
+            ),
         }
     }
 
@@ -158,7 +222,10 @@ impl NodeType {
         let parsed = i64::from_str(value);
         match parsed {
             Ok(val) => Ok(NodeType::IntegerLiteral(val)),
-            Err(e) => Err(format!("Failed conversion of string to integer. {:?}", e)),
+            Err(e) => error(
+                format!("Failed conversion of string to integer. {:?}", e),
+                None,
+            ),
         }
     }
 

@@ -119,7 +119,7 @@ impl Parser {
 #[allow(dead_code)]
 impl Parser {
     // higher order parsing stuff
-    /// Parse rules like left_expr ((alternative of validation_set) right_expr)*
+    /// Parse rules like `left_expr ((alternative of validation_set) right_expr)*`
     fn binop(
         &mut self,
         mut left_expression: impl FnMut(&mut Self) -> ParseResult,
@@ -147,9 +147,9 @@ impl Parser {
                     }
                 };
                 let ttype = token.ttype;
-                let operation = dbg!(BinOp::try_from(ttype).ok());
+                let operation = BinOp::try_from(ttype).ok();
                 if let Some(op) = operation {
-                    dbg!(validation_set(self));
+                    validation_set(self);
                     if !validation_set(self).contains(&op) {
                         self.put_back(token);
                         break;
@@ -167,6 +167,37 @@ impl Parser {
         }
         Ok(left_expr)
     }
+
+    /// Parse rules like `left_expr ((alternative of validation_set) right_expr)?`
+    fn unstackable_binop(
+        &mut self,
+        mut left_expression: impl FnMut(&mut Self) -> ParseResult,
+        mut right_expression: impl FnMut(&mut Self) -> ParseResult,
+        validation_set: impl Fn(&Self) -> &HashSet<BinOp>,
+    ) -> ParseResult {
+        let left_expr = left_expression(self)?;
+        if self.current_token.is_some() {
+            let token = self.take_token().unwrap();
+            let ttype = token.ttype;
+            let operation = BinOp::try_from(ttype).ok();
+            if let Some(op) = operation {
+                if !validation_set(self).contains(&op) {
+                    self.put_back(token);
+                    return Ok(left_expr);
+                }
+                self.advance();
+                let right_expr = right_expression(self)?;
+                let span = Span::between(&left_expr.span(), &right_expr.span());
+                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
+                Ok(node)
+            } else {
+                self.put_back(token);
+                Ok(left_expr)
+            }
+        } else {
+            Ok(left_expr)
+        }
+    }
 }
 
 impl Parser {
@@ -181,7 +212,6 @@ impl Parser {
                     if let Some(logger) = &self.logger {
                         logger.log(span.unwrap(), &message, Level::Error);
                     }
-                    // println!("Encountered Error in expression: {}", e);
                     break;
                 }
             }
@@ -220,53 +250,15 @@ impl Parser {
     }
 
     fn comparison_expr(&mut self) -> ParseResult {
-        let left_expr = self.equality_expr()?;
-        if self.current_token.is_some() {
-            let token = self.take_token().unwrap();
-            let ttype = dbg!(token.ttype);
-            let operation = dbg!(BinOp::try_from(ttype).ok());
-            if let Some(op) = operation {
-                if !self.comparison_set.contains(&op) {
-                    self.put_back(token);
-                    return Ok(left_expr);
-                }
-                self.advance();
-                let right_expr = self.equality_expr()?;
-                let span = Span::between(&left_expr.span(), &right_expr.span());
-                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
-                Ok(node)
-            } else {
-                self.put_back(token);
-                Ok(left_expr)
-            }
-        } else {
-            Ok(left_expr)
-        }
+        let left_expr = |s: &mut Self| s.equality_expr();
+        let right_expr = left_expr.clone();
+        self.unstackable_binop(left_expr, right_expr, |s| &s.comparison_set)
     }
 
     fn equality_expr(&mut self) -> ParseResult {
-        let left_expr = self.line_expr()?;
-        if self.current_token.is_some() {
-            let token = self.take_token().unwrap();
-            let ttype = token.ttype;
-            let operation = BinOp::try_from(ttype).ok();
-            if let Some(op) = operation {
-                if !self.equality_set.contains(&op) {
-                    self.put_back(token);
-                    return Ok(left_expr);
-                }
-                self.advance();
-                let right_expr = self.line_expr()?;
-                let span = Span::between(&left_expr.span(), &right_expr.span());
-                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
-                Ok(node)
-            } else {
-                self.put_back(token);
-                Ok(left_expr)
-            }
-        } else {
-            Ok(left_expr)
-        }
+        let left_expr = |s: &mut Self| s.line_expr();
+        let right_expr = left_expr.clone();
+        self.unstackable_binop(left_expr, right_expr, |s| &s.equality_set)
     }
 
     fn line_expr(&mut self) -> ParseResult {

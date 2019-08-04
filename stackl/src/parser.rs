@@ -124,7 +124,7 @@ impl Parser {
     fn take_token(&mut self) -> Result<Token, ErrorRecord> {
         self.current_token.take().ok_or_else(|| {
             let msg = ended_early();
-            let span = self.source.end();
+            let span = self.source.last_line();
             (msg, Some(span))
         })
     }

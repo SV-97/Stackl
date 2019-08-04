@@ -199,14 +199,28 @@ impl Parser {
     fn program(&mut self) -> ParseResult {
         let mut expressions = Vec::new();
 
+        let mut really_fucked_up = false;
         loop {
+            let t = self.current_token.clone();
             match self.expression() {
-                Ok(node) => expressions.push(node),
+                Ok(node) => {
+                    expressions.push(node);
+                    really_fucked_up = false;
+                }
                 Err((message, span)) => {
-                    if let Some(logger) = &self.logger {
-                        logger.log(span.unwrap(), &message, Level::Error);
+                    if self.current_token != t {
+                        // check if the code did actually parse anything to prevent trailing "ended early"s
+                        if let Some(logger) = &self.logger {
+                            logger.log(span.unwrap(), &message, Level::Error);
+                        }
+                        really_fucked_up = false;
+                    } else {
+                        if really_fucked_up {
+                            break;
+                        }
+                        self.advance(); // skip token that produced error
+                        really_fucked_up = true;
                     }
-                    break;
                 }
             }
         }

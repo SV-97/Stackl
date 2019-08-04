@@ -1,3 +1,4 @@
+#[macro_use]
 mod prelude;
 mod tokenizer;
 #[macro_use]

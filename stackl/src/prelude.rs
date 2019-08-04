@@ -4,6 +4,20 @@ use std::ops::Range;
 
 pub type ErrorRecord = (String, Option<Span>); // maybe make this an actual struct/enum and implement From<String> for it
 
+#[macro_export]
+macro_rules! timeit {
+    ( $a: expr ) => {
+        {
+            use std::time::Instant;
+            let t1 = Instant::now();
+            let temp = $a;
+            let t2 = Instant::now();
+            dbg!(t2.duration_since(t1));
+            temp
+        }
+    }
+}
+
 pub fn error<T>(message: String, span: Option<Span>) -> Result<T, (String, Option<Span>)> {
     Err((message, span))
 }

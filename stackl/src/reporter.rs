@@ -24,41 +24,13 @@ impl Logger {
         Self { source }
     }
 
-    /// Finds the index into source such that there are n newlines before/behind the position pos
-    /// Positive n means newlines after pos
-    /// Negative n means newline before pos
-    fn find_newline(&self, pos: usize, n: isize) -> usize {
-        use std::ops::{Add, Sub};
-        let n = -n;
-        let f = match n {
-            n if n > 0 => Sub::sub,
-            n if n < 0 => Add::add,
-            0 => return pos,
-            _ => panic!(),
-        };
-        let mut n = n;
-        let mut pos = pos;
-        while let Some(c) = self.source.get(pos) {
-            if n == 0 {
-                break;
-            }
-            if c.is_newline() {
-                n = f(n, 1);
-                if n == 0 {
-                    break;
-                }
-            }
-            pos = f(pos.try_into().unwrap(), 1).try_into().unwrap();
-        }
-        pos
-    }
-
     /// Print a message at span in source with provided printing params
     fn print_msg(&self, span_error: Span, params: Vec<&dyn AnsiCode>, level: &str, message: &str) {
-        let start_pos = self.find_newline(span_error.offset, -1); // find prior newline
-        let end_pos = self.find_newline(span_error.offset, 1); // find next newline
+        let line = self.source.get_line(span_error);
+        let start_pos = line.offset;
+        let end_pos = start_pos + line.length;
         let span_prior = Span::new(
-            start_pos + 1,
+            start_pos,
             span_error.column.checked_sub(2).unwrap_or(0),
             span_error.line,
             1,
@@ -97,13 +69,6 @@ impl Logger {
         let prior = self.source.from_span(&span_prior);
         let after = self.source.from_span(&span_after);
         let error = {
-            /*
-            use super::functional::compose;
-            let g: &Fn(_) -> _ = if after.is_empty() { &(|s: &str| s.trim_end()) } else { &(|s| s) };
-            let h: &Fn(_) -> _ = if prior.is_empty() { &(|s: &str| s.trim_start()) } else { &(|s| s) };
-            let raw_error = self.source.from_span(&span_error);
-            colored!("{}", &params, compose(g, h)(&raw_error).to_string())
-            */
             let raw_error = self.source.from_span(&span_error);
             let r1 = if after.is_empty() {
                 raw_error.trim_end()

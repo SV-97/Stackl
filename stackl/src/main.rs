@@ -4,6 +4,7 @@ mod tokenizer;
 #[allow(dead_code)]
 mod fancyterm;
 mod ast;
+// mod constant_folder;
 mod dot_translator;
 mod functional;
 mod parser;
@@ -48,7 +49,7 @@ fn handle_file(filename: &str) {
     let source = Rc::new(Source::new(filename.to_string(), source));
     let logger = Rc::new(Logger::new(Rc::clone(&source)));
     let tokens = Tokenizer::new(Rc::clone(&source), Some(Rc::clone(&logger)));
-    let mut parser = Parser::new(tokens, Rc::clone(&source), None); // Some(Rc::clone(&logger))
+    let mut parser = Parser::new(tokens, Rc::clone(&source), Some(Rc::clone(&logger)));
     let root = parser.parse();
     let dot_txt = dot_translator::visit(&root);
     write_file("/home/sv-97/GitHub/Stackl/stackl/out/test.dot", dot_txt);

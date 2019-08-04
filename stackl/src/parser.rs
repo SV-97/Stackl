@@ -5,20 +5,11 @@ use super::tokenizer::*;
 
 use std::collections::{HashSet, VecDeque};
 use std::convert::TryFrom;
+use std::hash;
 use std::rc::Rc;
 use std::result::Result;
 
 type ParseResult = Result<Node, ErrorRecord>;
-
-static COMPARISON_OPS: [BinOp; 4] = [
-    BinOp::Greater,
-    BinOp::GreaterOrEq,
-    BinOp::Less,
-    BinOp::LessOrEq,
-];
-static EQUALITY_OPS: [BinOp; 2] = [BinOp::Equal, BinOp::NotEqual];
-static LINE_OPS: [BinOp; 2] = [BinOp::Add, BinOp::Sub];
-static DOT_OPS: [BinOp; 3] = [BinOp::Mul, BinOp::Div, BinOp::Mod];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Parser {
@@ -33,26 +24,49 @@ pub struct Parser {
     dot_set: HashSet<BinOp>,
     or_set: HashSet<BinOp>,
     and_set: HashSet<BinOp>,
+    unary_set: HashSet<UnOp>,
+}
+
+macro_rules! set {
+    ( $($item:expr),* ) => {
+        {
+            #[allow(unused_mut)]
+            let mut s: HashSet<_> = HashSet::new();
+            $(
+                s.insert($item);
+            )*
+            s
+        }
+    }
 }
 
 impl Parser {
     pub fn new(tokenizer: Tokenizer, source: Rc<Source>, logger: Option<Rc<Logger>>) -> Self {
-        let mut or_set = HashSet::new();
-        or_set.insert(BinOp::Or);
-        let mut and_set = HashSet::new();
-        and_set.insert(BinOp::And);
+        let or_set = set!(BinOp::Or);
+        let and_set = set!(BinOp::And);
+        let comparison_set = set!(
+            BinOp::Greater,
+            BinOp::GreaterOrEq,
+            BinOp::Less,
+            BinOp::LessOrEq
+        );
+        let equality_set = set!(BinOp::Equal, BinOp::NotEqual);
+        let line_set = set!(BinOp::Add, BinOp::Sub);
+        let dot_set = set!(BinOp::Mul, BinOp::Div, BinOp::Mod);
+        let unary_set = set!(UnOp::Not, UnOp::Minus);
         let mut parser = Parser {
             tokenizer,
             current_token: None,
             token_buffer: VecDeque::new(),
             source,
             logger,
-            comparison_set: COMPARISON_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
-            equality_set: EQUALITY_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
-            line_set: LINE_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
-            dot_set: DOT_OPS.iter().cloned().collect::<HashSet<BinOp>>(),
+            comparison_set,
+            equality_set,
+            line_set,
+            dot_set,
             or_set,
             and_set,
+            unary_set,
         };
         parser.advance();
         parser
@@ -128,7 +142,7 @@ impl Parser {
     ) -> ParseResult {
         let mut left_expr = left_expression(self)?;
         loop {
-            left_expr = if let Some(op) = self.try_binop(&validation_set) {
+            left_expr = if let Some((op, _)) = self.try_token(&validation_set) {
                 let right_expr = right_expression(self)?;
                 let span = Span::between(&left_expr.span(), &right_expr.span());
                 let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
@@ -148,7 +162,7 @@ impl Parser {
         validation_set: impl Fn(&Self) -> &HashSet<BinOp>,
     ) -> ParseResult {
         let left_expr = left_expression(self)?;
-        if let Some(op) = self.try_binop(validation_set) {
+        if let Some((op, _)) = self.try_token(validation_set) {
             let right_expr = right_expression(self)?;
             let span = Span::between(&left_expr.span(), &right_expr.span());
             let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
@@ -159,17 +173,20 @@ impl Parser {
     }
 
     /// Match current token against a set of binary operations and return it if it's in there
-    fn try_binop(&mut self, validation_set: impl Fn(&Self) -> &HashSet<BinOp>) -> Option<BinOp> {
+    fn try_token<T>(&mut self, validation_set: impl Fn(&Self) -> &HashSet<T>) -> Option<(T, Span)>
+    where
+        T: TryFrom<Tok> + Eq + hash::Hash,
+    {
         let token = self.take_token().ok()?;
         let ttype = token.ttype;
-        let operation = BinOp::try_from(ttype).ok();
+        let operation = T::try_from(ttype).ok();
         if let Some(op) = operation {
             if !validation_set(self).contains(&op) {
                 self.put_back(token);
                 return None;
             }
             self.advance();
-            Some(op)
+            Some((op, token.span))
         } else {
             self.put_back(token);
             None
@@ -251,26 +268,14 @@ impl Parser {
     }
 
     fn unary_expr(&mut self) -> ParseResult {
-        let token = self.take_token()?;
-        match token {
-            Token {
-                ttype: ttype @ Tok::Not,
-                span,
-            }
-            | Token {
-                ttype: ttype @ Tok::Sub,
-                span,
-            } => {
-                self.advance();
-                let child = self.unary_expr()?;
-                let op = UnOp::try_from(ttype)?;
-                let _type = NodeType::unary_operation(op, child);
-                Ok(Node::new(span, _type))
-            }
-            _ => {
-                self.put_back(token);
-                self.primary_expr()
-            }
+        let operator = self.try_token(|s| &s.unary_set);
+        if let Some((op, span)) = operator {
+            let operand = self.unary_expr()?;
+            let span = Span::between(&span, &operand.span());
+            let _type = NodeType::unary_operation(op, operand);
+            Ok(Node::new(span, _type))
+        } else {
+            self.primary_expr()
         }
     }
 

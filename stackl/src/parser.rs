@@ -128,42 +128,14 @@ impl Parser {
     ) -> ParseResult {
         let mut left_expr = left_expression(self)?;
         loop {
-            let token = self.take_token();
-            if let Ok(token) = token {
-                let mut build_operation = |s: &mut Self, binop: BinOp| -> ParseResult {
-                    s.advance();
-                    let right = right_expression(s);
-                    match right {
-                        Ok(right_expr) => {
-                            let span = Span::between(&left_expr.span(), &right_expr.span());
-                            let binary_operation =
-                                NodeType::binary_operation(binop, left_expr.clone(), right_expr); // clone here may be expensive
-                            let node = Node::new(span, binary_operation);
-                            Ok(node)
-                        }
-                        Err((_, span)) => {
-                            return error("Failed to construct line expression. Right value is no valid expression.".to_string(), span)
-                        }
-                    }
-                };
-                let ttype = token.ttype;
-                let operation = BinOp::try_from(ttype).ok();
-                if let Some(op) = operation {
-                    validation_set(self);
-                    if !validation_set(self).contains(&op) {
-                        self.put_back(token);
-                        break;
-                    } else {
-                        let operation_node = build_operation(self, op)?;
-                        left_expr = operation_node;
-                    }
-                } else {
-                    self.put_back(token);
-                    break;
-                }
+            left_expr = if let Some(op) = self.try_binop(&validation_set) {
+                let right_expr = right_expression(self)?;
+                let span = Span::between(&left_expr.span(), &right_expr.span());
+                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
+                node
             } else {
                 break;
-            }
+            };
         }
         Ok(left_expr)
     }
@@ -176,26 +148,31 @@ impl Parser {
         validation_set: impl Fn(&Self) -> &HashSet<BinOp>,
     ) -> ParseResult {
         let left_expr = left_expression(self)?;
-        if self.current_token.is_some() {
-            let token = self.take_token().unwrap();
-            let ttype = token.ttype;
-            let operation = BinOp::try_from(ttype).ok();
-            if let Some(op) = operation {
-                if !validation_set(self).contains(&op) {
-                    self.put_back(token);
-                    return Ok(left_expr);
-                }
-                self.advance();
-                let right_expr = right_expression(self)?;
-                let span = Span::between(&left_expr.span(), &right_expr.span());
-                let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
-                Ok(node)
-            } else {
-                self.put_back(token);
-                Ok(left_expr)
-            }
+        if let Some(op) = self.try_binop(validation_set) {
+            let right_expr = right_expression(self)?;
+            let span = Span::between(&left_expr.span(), &right_expr.span());
+            let node = Node::new(span, NodeType::binary_operation(op, left_expr, right_expr));
+            Ok(node)
         } else {
             Ok(left_expr)
+        }
+    }
+
+    /// Match current token against a set of binary operations and return it if it's in there
+    fn try_binop(&mut self, validation_set: impl Fn(&Self) -> &HashSet<BinOp>) -> Option<BinOp> {
+        let token = self.take_token().ok()?;
+        let ttype = token.ttype;
+        let operation = BinOp::try_from(ttype).ok();
+        if let Some(op) = operation {
+            if !validation_set(self).contains(&op) {
+                self.put_back(token);
+                return None;
+            }
+            self.advance();
+            Some(op)
+        } else {
+            self.put_back(token);
+            None
         }
     }
 }

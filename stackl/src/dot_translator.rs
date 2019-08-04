@@ -115,7 +115,7 @@ impl DotTranslator {
         use DotNodeType::*;
         let buffer = "
 digraph AST {
-    rankdir = LR;
+    rankdir = TB;
     compound = true;
     labelloc = \"t\";
     label = <<B>Syntax-Tree</B><BR/>Read left to right top to bottom>;

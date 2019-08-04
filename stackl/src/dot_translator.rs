@@ -218,6 +218,7 @@ impl DotTranslator {
                 }
                 self.buffer.push_str("  edge[tailport=\"\"];\n");
             }
+            //Empty => self.buffer.push_str("  edge[style=\"\"];\n"),
             _ => (),
         }
     }
@@ -229,6 +230,11 @@ impl DotTranslator {
                 node,
                 Some("shape=record, label=\"<if>if|<then>then|<else>else\""),
             ),
+            /*
+            DotNodeType::Empty => {
+                self.buffer.push_str("  edge[style=\"invis\"];\n");
+                self.declare_node(node, Some("style=\"invis\""))
+            }*/
             _ => self.declare_node(node, None),
         };
         let arrow = format!("    {} -> {};\n", root_name, current_name);
@@ -245,6 +251,11 @@ impl NodeVisitor<String> for DotTranslator {
         self.buffer.push_str("}\n");
         let mut buffer = "".to_string();
         std::mem::swap(&mut self.buffer, &mut buffer);
-        buffer
+        buffer // remove all empties - easier than not adding them in the first place
+            // may need to be fixed if it's an actual performance hit
+            .lines()
+            .filter(|l| !l.contains("empty"))
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }

@@ -38,7 +38,7 @@ impl Logger {
         let span_after = Span::new(
             span_error.offset + span_error.length,
             end_pos
-                .checked_sub(span_error.offset + span_error.length)
+                .checked_sub(span_error.offset + span_error.length + 1)
                 .unwrap_or(0),
             span_error.line,
             span_error.column + span_error.length,

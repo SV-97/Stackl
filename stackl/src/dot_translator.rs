@@ -115,6 +115,7 @@ impl DotTranslator {
         use DotNodeType::*;
         let buffer = "
 digraph AST {
+    graph [concentrate=true];
     rankdir = TB;
     compound = true;
     labelloc = \"t\";

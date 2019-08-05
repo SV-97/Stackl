@@ -13,6 +13,7 @@ pub enum Tok {
     Float,
     ScientificFloat, // scientific notation
     Integer,
+    String,
     True,
     False,
     Assign, // =
@@ -65,16 +66,22 @@ impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "<{}> {}",
-            colored!("{:?}", params!(Color::Blue), self.ttype),
+            "{} at {}",
+            self.ttype,
             colored!("{}", params!(Modifier::Faint), self.span)
         )
     }
 }
 
+impl fmt::Display for Tok {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<{}>", colored!("{:?}", params!(Color::Blue), self))
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tokenizer {
-    text: Rc<Source>,
+    source: Rc<Source>,
     pos: usize,
     line: usize,
     column: usize,
@@ -88,6 +95,7 @@ impl Iterator for Tokenizer {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(current_char) = self.current_char {
             match current_char {
+                '"' => Some(self.string()),
                 ':' => Some(self.colon()),
                 '!' => Some(self.not_equal()),
                 '=' if self.peek() == Some('=') => Some(self.equal()),
@@ -154,21 +162,21 @@ impl Drop for Tokenizer {
 impl Tokenizer {
     pub fn new(source: Rc<Source>, logger: Option<Rc<Logger>>) -> Self {
         let mut lex = Self {
-            text: source,
+            source,
             pos: 0,
             line: 1,
             column: 1,
             current_char: None,
             logger,
         };
-        lex.current_char = lex.text.get(0);
+        lex.current_char = lex.source.get(0);
         lex
     }
 
     /// Set new source
     /// Doesn't reset counters!
     pub fn set_source(&mut self, source: Rc<Source>) {
-        self.text = source;
+        self.source = source;
     }
 
     /// Reset all internal counters, set current char to first char of input
@@ -176,7 +184,7 @@ impl Tokenizer {
         self.pos = 0;
         self.line = 1;
         self.column = 1;
-        self.current_char = self.text.get(0);
+        self.current_char = self.source.get(0);
     }
 }
 
@@ -192,16 +200,16 @@ impl Tokenizer {
     }
 
     fn peek(&self) -> Option<char> {
-        self.text.get(self.pos + 1)
+        self.source.get(self.pos + 1)
     }
 
     fn peek_n(&self, n: usize) -> Option<char> {
-        self.text.get(self.pos + n)
+        self.source.get(self.pos + n)
     }
 
     fn advance(&mut self) {
         self.pos += 1;
-        self.current_char = self.text.get(self.pos);
+        self.current_char = self.source.get(self.pos);
         if let Some(c) = self.current_char {
             match c {
                 c if c.is_newline() => {
@@ -225,6 +233,29 @@ impl Tokenizer {
             }
         }
         n
+    }
+}
+
+impl Tokenizer {
+    fn string(&mut self) -> Token {
+        // todo handle escape sequences (esp '\"' breaks currently)
+        let mut length = 0;
+        self.advance();
+        let mut span = self.span(0);
+        while let Some(c) = self.current_char {
+            match c {
+                '"' => {
+                    self.advance();
+                    break;
+                }
+                _ => {
+                    self.advance();
+                    length += 1;
+                }
+            }
+        }
+        span.length = length;
+        Token::new(Tok::String, span)
     }
 
     fn indent(&mut self) -> Token {

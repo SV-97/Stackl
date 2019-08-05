@@ -117,7 +117,15 @@ impl Parser {
         if self.current_token.is_none() {
             self.current_token = Some(tok);
         } else {
-            panic!("Fatal error: couldn't put token {:?} back.", tok)
+            if let Some(logger) = &self.logger {
+                logger.log(
+                    Span::default(),
+                    &format!("Fatal error: couldn't put token {:?} back.", tok),
+                    Level::Error,
+                );
+            } else {
+                panic!("Fatal error: couldn't put token {:?} back.", tok)
+            }
         }
     }
 
@@ -127,6 +135,12 @@ impl Parser {
             let span = self.source.last_line();
             (msg, Some(span))
         })
+    }
+
+    fn log(&mut self, span: Span, message: &str) {
+        if let Some(logger) = &self.logger {
+            logger.log(span, &format!("Syntax Error: {}", &message), Level::Error);
+        }
     }
 }
 
@@ -210,9 +224,7 @@ impl Parser {
                 Err((message, span)) => {
                     if self.current_token != t {
                         // check if the code did actually parse anything to prevent trailing "ended early"s
-                        if let Some(logger) = &self.logger {
-                            logger.log(span.unwrap(), &message, Level::Error);
-                        }
+                        self.log(span.unwrap(), &message);
                         really_fucked_up = false;
                     } else {
                         if really_fucked_up {
@@ -337,6 +349,9 @@ impl Parser {
             | tok @ Token {
                 ttype: Tok::ScientificFloat,
                 ..
+            }
+            | tok @ Token {
+                ttype: Tok::String, ..
             }
             | tok @ Token {
                 ttype: Tok::True, ..
@@ -466,6 +481,14 @@ impl Parser {
                 let node = Node::new(span, NodeType::BoolLiteral(false));
                 Ok(node)
             }
+            Token {
+                ttype: Tok::String,
+                span,
+            } => {
+                let value = self.source.from_span(&span);
+                let node = Node::new(span, NodeType::StringLiteral(value));
+                Ok(node)
+            }
             Token { span, .. } => error("Couldn't match literal value.".to_string(), Some(span)),
         }
     }
@@ -478,8 +501,8 @@ fn ended_early() -> String {
 fn unexpected<T>(expected: Tok, got_instead: Token) -> Result<T, (String, Option<Span>)> {
     error(
         format!(
-            "Couldn't match block expression: Expected {:?}, got {:?} instead",
-            expected, got_instead
+            "Couldn't match block expression: Expected {}, got {} instead",
+            expected, got_instead.ttype
         ),
         Some(got_instead.span),
     )

@@ -1,3 +1,4 @@
+/// Known issue: if multiple colored pieces of text are stacked they interfer with each other
 use std::fmt::{Debug, Display};
 
 pub trait AnsiCode {

@@ -36,8 +36,8 @@ pub enum NodeType {
     Program {
         expressions: Vec<Node>,
     },
-    IntegerLiteral(i64),
-    FloatLiteral(f64),
+    IntegerLiteral(Int),
+    FloatLiteral(Float),
     StringLiteral(String),
     BoolLiteral(bool),
     Identifier {
@@ -58,7 +58,8 @@ pub enum NodeType {
         if_true: Option<Box<Node>>, // not currently used but may but useful for something like rubys `unless`
         if_false: Option<Box<Node>>,
     },
-    Empty
+    Empty,
+    Error(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]

@@ -2,11 +2,18 @@ use super::prelude::*;
 use super::tokenizer::Tok;
 
 use std::convert::TryFrom;
-use std::str::FromStr;
 use std::fmt;
+use std::str::FromStr;
+
+pub type Float = f64;
+pub type Int = i64;
 
 pub trait NodeVisitor<T> {
     fn visit(&mut self, root: &Node) -> T;
+}
+
+pub trait NodeTransformer<T> {
+    fn visit(&mut self, root: Node) -> T;
 }
 
 #[derive(Clone, Debug, PartialEq)]

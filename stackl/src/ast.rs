@@ -174,7 +174,6 @@ impl Default for Node {
     }
 }
 
-
 impl Node {
     pub fn new(span: Span, node: NodeType) -> Self {
         Node { span, node }
@@ -186,6 +185,42 @@ impl Node {
 
     pub fn node_type(&self) -> &NodeType {
         &self.node
+    }
+
+    pub fn is_constant(&self) -> bool {
+        self.node.is_constant()
+    }
+}
+
+impl NodeType {
+    pub fn is_constant(&self) -> bool {
+        use NodeType::*;
+        match self {
+            Assignment {
+                right_val,
+                ..
+            } => right_val.is_constant(),
+            BinaryOp {
+                left,
+                right,
+                ..
+            } => left.is_constant() && right.is_constant(),
+            UnaryOp {
+                val,
+                ..
+            } => val.is_constant(),
+            Block { expressions }
+            | Program { expressions} => expressions.iter().all(Node::is_constant),
+            Expression { expression } => expression.is_constant(),
+            If { condition, .. } => condition.is_constant(),
+            Empty
+            | IntegerLiteral(_)
+            | FloatLiteral(_)
+            | StringLiteral(_)
+            | BoolLiteral(_) => true,
+            Error(_)
+            | Identifier { .. } => false,
+        }
     }
 }
 

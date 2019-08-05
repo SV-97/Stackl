@@ -6,16 +6,14 @@ pub type ErrorRecord = (String, Option<Span>); // maybe make this an actual stru
 
 #[macro_export]
 macro_rules! timeit {
-    ( $a: expr ) => {
-        {
-            use std::time::Instant;
-            let t1 = Instant::now();
-            let temp = $a;
-            let t2 = Instant::now();
-            dbg!(t2.duration_since(t1));
-            temp
-        }
-    }
+    ( $a: expr ) => {{
+        use std::time::Instant;
+        let t1 = Instant::now();
+        let temp = $a;
+        let t2 = Instant::now();
+        dbg!(t2.duration_since(t1));
+        temp
+    }};
 }
 
 pub fn error<T>(message: String, span: Option<Span>) -> Result<T, (String, Option<Span>)> {
@@ -199,7 +197,11 @@ impl Source {
 
     /// Find the last line
     pub fn last_line(&self) -> Span {
-        self.get_line(Span::new(self.end(), 0, self.number_of_lines, 0))
+        if self.number_of_lines == 1 {
+            Span::new(0, self.length, 1, 1)
+        } else {
+            self.get_line(Span::new(self.end(), 0, self.number_of_lines, 0))
+        }
     }
 }
 
@@ -208,29 +210,33 @@ impl Source {
     /// Positive n means newlines after pos
     /// Negative n means newline before pos
     fn find_newline(&self, pos: usize, n: isize) -> usize {
-        use convert::TryInto;
-        use std::ops::{Add, Sub};
-        let n = -n;
-        let f = match n {
-            n if n > 0 => Sub::sub,
-            n if n < 0 => Add::add,
-            0 => return pos,
-            _ => panic!(),
-        };
-        let mut n = n;
-        let mut pos = pos;
-        while let Some(c) = self.get(pos) {
-            if n == 0 {
-                break;
-            }
-            if c.is_newline() {
-                n = f(n, 1);
+        if self.number_of_lines == 1 {
+            0 // kinda dirty fix
+        } else {
+            use convert::TryInto;
+            use std::ops::{Add, Sub};
+            let n = -n;
+            let f = match n {
+                n if n > 0 => Sub::sub,
+                n if n < 0 => Add::add,
+                0 => return pos,
+                _ => panic!(),
+            };
+            let mut n = n;
+            let mut pos = pos;
+            while let Some(c) = self.get(pos) {
                 if n == 0 {
                     break;
                 }
+                if c.is_newline() {
+                    n = f(n, 1);
+                    if n == 0 {
+                        break;
+                    }
+                }
+                pos = f(pos.try_into().unwrap(), 1).try_into().unwrap();
             }
-            pos = f(pos.try_into().unwrap(), 1).try_into().unwrap();
+            pos
         }
-        pos
     }
 }

@@ -46,6 +46,7 @@ pub enum Tok {
 
     Indent(usize),
     Colon,
+    Error,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -266,12 +267,12 @@ impl Tokenizer {
             c => {
                 s.length = 1;
                 let message = if let Some(c) = c {
-                    format!("Expected '=' after '!', got {:?}, inferred '!='.", c)
+                    format!("Expected '=' after '!', got {:?}, did you mean '!='?", c)
                 } else {
                     "Expected '=' after '!', ended early instead. Did you mean '!='?".to_string()
                 };
                 self.log(s, &message, Level::Warning);
-                let t = Token::new(Tok::NotEqual, s);
+                let t = Token::new(Tok::Error, s);
                 self.advance();
                 t
             }

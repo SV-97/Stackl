@@ -74,7 +74,7 @@ impl convert::From<&NodeType> for DotNodeType {
             Program { .. } => D::Program,
             IntegerLiteral(x) => D::IntegerLiteral(format!("{}", x)),
             FloatLiteral(x) => D::FloatLiteral(format!("{}", x)),
-            StringLiteral(s) => D::StringLiteral(format!("{:?}", s)),
+            StringLiteral(s) => D::StringLiteral(format!("\\\"{}\\\"", s)),
             BoolLiteral(b) => D::BoolLiteral(format!("{}", b)),
             Expression { .. } => D::Expression,
             Block { .. } => D::Block,
@@ -82,6 +82,7 @@ impl convert::From<&NodeType> for DotNodeType {
             Identifier { name } => D::Identifier(name.to_string()),
             Assignment { .. } => D::Assignment,
             Empty => D::Empty,
+            Error(s) => D::StringLiteral(format!("Error: {}", s)),
         }
     }
 }
@@ -166,7 +167,7 @@ impl DotTranslator {
         let number = self.get_number(&node_type_identifier);
         let current_name = format!("{}{}", node_type_identifier, number);
         let parameters = parameters
-            .map(|s| s.to_string())
+            .map(<str>::to_string)
             .unwrap_or(format!("label=\"{}\"", metadata));
         let declaration = format!("    {}[{}];\n", current_name, parameters);
         self.buffer.push_str(&declaration);

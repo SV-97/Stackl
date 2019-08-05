@@ -5,13 +5,14 @@ mod tokenizer;
 #[allow(dead_code)]
 mod fancyterm;
 mod ast;
-// mod constant_folder;
+mod constant_folder;
 mod dot_translator;
 mod functional;
 mod parser;
 mod reporter;
 mod shell;
 
+use ast::NodeTransformer;
 use fancyterm::*;
 use parser::*;
 use prelude::*;
@@ -51,7 +52,9 @@ fn handle_file(filename: &str) {
     let logger = Rc::new(Logger::new(Rc::clone(&source)));
     let tokens = Tokenizer::new(Rc::clone(&source), Some(Rc::clone(&logger)));
     let mut parser = Parser::new(tokens, Rc::clone(&source), Some(Rc::clone(&logger)));
-    let root = parser.parse();
+    let mut root = parser.parse();
+    let mut constant_folder = constant_folder::ConstantFolder::new(None);
+    root = constant_folder.visit(root);
     let dot_txt = dot_translator::visit(&root);
     write_file("/home/sv-97/GitHub/Stackl/stackl/out/test.dot", dot_txt);
     // println!("{:?}", parser.parse());
@@ -76,7 +79,9 @@ fn handle_repl() {
         tokens.set_source(Rc::clone(&source));
         tokens.reset();
         parser = Parser::new(tokens, Rc::clone(&source), None); // Some(Rc::clone(&logger))
-        let root = parser.parse();
+        let mut root = parser.parse();
+        let mut constant_folder = constant_folder::ConstantFolder::new(None);
+        root = constant_folder.visit(root);
         let dot_txt = dot_translator::visit(&root);
         write_file("/home/sv-97/GitHub/Stackl/stackl/out/test.dot", dot_txt);
         repl.writeln(format!("{:?}", root));
@@ -85,7 +90,7 @@ fn handle_repl() {
 
 fn main() {
     let mut args = args().collect::<Vec<String>>();
-    args.push("/home/sv-97/GitHub/Stackl/stackl/examples/src2.stackl".to_string()); // only for debugging
+    args.push("/home/sv-97/GitHub/Stackl/stackl/examples/src3.stackl".to_string()); // only for debugging
     let filename = &args.get(1);
 
     match filename {

@@ -53,8 +53,7 @@ fn handle_file(filename: &str) {
     let tokens = Tokenizer::new(Rc::clone(&source), Some(Rc::clone(&logger)));
     let mut parser = Parser::new(tokens, Rc::clone(&source), Some(Rc::clone(&logger)));
     let mut root = parser.parse();
-    let mut constant_folder = constant_folder::ConstantFolder::new(None);
-    root = constant_folder.visit(root);
+    root = constant_folder::fold_constants(root);
     let dot_txt = dot_translator::visit(&root);
     write_file("/home/sv-97/GitHub/Stackl/stackl/out/test.dot", dot_txt);
     // println!("{:?}", parser.parse());
@@ -80,8 +79,7 @@ fn handle_repl() {
         tokens.reset();
         parser = Parser::new(tokens, Rc::clone(&source), None); // Some(Rc::clone(&logger))
         let mut root = parser.parse();
-        let mut constant_folder = constant_folder::ConstantFolder::new(None);
-        root = constant_folder.visit(root);
+        root = constant_folder::fold_constants(root);
         let dot_txt = dot_translator::visit(&root);
         write_file("/home/sv-97/GitHub/Stackl/stackl/out/test.dot", dot_txt);
         repl.writeln(format!("{:?}", root));

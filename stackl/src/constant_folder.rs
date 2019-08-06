@@ -6,6 +6,13 @@ use super::reporter::{Level, Logger};
 
 use std::rc::Rc;
 
+/// Transform a tree by folding constants and evaluating constant expressions
+pub fn fold_constants(root: Node) -> Node {
+    let mut cf = ConstantFolder::new(None);
+    let root = cf.visit(root);
+    root
+}
+
 pub struct ConstantFolder {
     logger: Option<Rc<Logger>>,
 }
@@ -52,7 +59,7 @@ impl NodeTransformer<Node> for ConstantFolder {
                     let op = NodeType::unary_operation(operation, self.visit(*val));
                     Node::new(span, op)
                 }
-                _ => panic!("Whatcha doing bro"),
+                x => x,
             }
         }
     }

@@ -30,8 +30,8 @@ impl Logger {
         let end_pos = start_pos + line.length;
         let span_prior = Span::new(
             start_pos,
-            span_error.column.checked_sub(2).unwrap_or(0),
-            span_error.line,
+            span_error.column().checked_sub(2).unwrap_or(0),
+            span_error.line(),
             1,
         );
         let span_after = Span::new(
@@ -39,8 +39,8 @@ impl Logger {
             end_pos
                 .checked_sub(span_error.offset + span_error.length + 1)
                 .unwrap_or(0),
-            span_error.line,
-            span_error.column + span_error.length,
+            span_error.line(),
+            span_error.column() + span_error.length,
         );
         // print_colored!(error, params!(Color::Red));
 
@@ -64,7 +64,7 @@ impl Logger {
     ) -> String {
         let aps = params!(Color::Blue, Modifier::Bold);
 
-        let line_no = format!("{}", span_error.line);
+        let line_no = format!("{}", span_error.line());
         let prior = self.source.from_span(&span_prior);
         let after = self.source.from_span(&span_after);
         let error = {
@@ -89,7 +89,7 @@ impl Logger {
         buf.push_str(&colored!("--> ", &aps));
         buf.push_str(&format!(
             "{}:{}:{}\n",
-            self.source.name, span_error.line, span_error.column
+            self.source.name, span_error.line(), span_error.column()
         ));
         let indent = line_no.len() + 2;
         for _ in 0..indent {

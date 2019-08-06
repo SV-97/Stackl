@@ -196,30 +196,16 @@ impl NodeType {
     pub fn is_constant(&self) -> bool {
         use NodeType::*;
         match self {
-            Assignment {
-                right_val,
-                ..
-            } => right_val.is_constant(),
-            BinaryOp {
-                left,
-                right,
-                ..
-            } => left.is_constant() && right.is_constant(),
-            UnaryOp {
-                val,
-                ..
-            } => val.is_constant(),
-            Block { expressions }
-            | Program { expressions} => expressions.iter().all(Node::is_constant),
+            Assignment { right_val: _, .. } => false, // could also make right_val.is_constant() but only for assignment in the context of constant declaration
+            BinaryOp { left, right, .. } => left.is_constant() && right.is_constant(),
+            UnaryOp { val, .. } => val.is_constant(),
+            Block { expressions } | Program { expressions } => {
+                expressions.iter().all(Node::is_constant)
+            }
             Expression { expression } => expression.is_constant(),
             If { condition, .. } => condition.is_constant(),
-            Empty
-            | IntegerLiteral(_)
-            | FloatLiteral(_)
-            | StringLiteral(_)
-            | BoolLiteral(_) => true,
-            Error(_)
-            | Identifier { .. } => false,
+            Empty | IntegerLiteral(_) | FloatLiteral(_) | StringLiteral(_) | BoolLiteral(_) => true,
+            Error(_) | Identifier { .. } => false,
         }
     }
 }

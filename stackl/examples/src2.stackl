@@ -1,11 +1,21 @@
-abcd = 5.0 + 10
+a = 5.0 + 10
 b = 1.0
 if abcd + b >= 3:
     print(a)
+    # if b ! true:
+    #    b = 5.0
+    # end
+else:
+    if true:
+        420
+    else: 
+        69
+    end
 end
 
-c = true
 
-if not abcd != b and c:
-    print(b)
-end
+# d = / 420
+b = 3 + 5
+
+c = 2
+e = "Test String"

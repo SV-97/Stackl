@@ -2,30 +2,19 @@
 /// duplicate unaries (like not not etc.) and brackets so e.g Expression -> Expression
 use super::ast::{BinOp, Float, Int, Node, NodeTransformer, NodeType, UnOp};
 use super::prelude::*;
-use super::reporter::{Level, Logger};
-
-use std::rc::Rc;
 
 /// Transform a tree by folding constants and evaluating constant expressions
 pub fn fold_constants(root: Node) -> Node {
-    let mut cf = ConstantFolder::new(None);
+    let mut cf = ConstantFolder::new();
     let root = cf.visit(root);
     root
 }
 
-pub struct ConstantFolder {
-    logger: Option<Rc<Logger>>,
-}
+pub struct ConstantFolder {}
 
 impl ConstantFolder {
-    pub fn new(logger: Option<Rc<Logger>>) -> Self {
-        ConstantFolder { logger }
-    }
-
-    fn log(&self, span: Span, message: &str, level: Level) {
-        if let Some(l) = &self.logger {
-            l.log(span, message, level);
-        }
+    pub fn new() -> Self {
+        ConstantFolder {}
     }
 }
 
@@ -59,6 +48,51 @@ impl NodeTransformer<Node> for ConstantFolder {
                     let op = NodeType::unary_operation(operation, self.visit(*val));
                     Node::new(span, op)
                 }
+                Node {
+                    node: Expression { expression },
+                    ..
+                } => self.visit(*expression),
+                Node {
+                    node: Program { expressions },
+                    span,
+                } => {
+                    let exprs = expressions
+                        .into_iter()
+                        .map(|x| self.visit(x))
+                        .collect::<Vec<Node>>();
+                    Node::new(span, NodeType::program(exprs))
+                }
+                Node {
+                    node:
+                        If {
+                            condition,
+                            if_true,
+                            if_false,
+                        },
+                    span,
+                } => {
+                    let condition = Box::new(self.visit(*condition));
+                    let if_true = if_true.map(|x| Box::new(self.visit(*x)));
+                    let if_false = if_false.map(|x| Box::new(self.visit(*x)));
+                    Node::new(
+                        span,
+                        NodeType::If {
+                            condition,
+                            if_true,
+                            if_false,
+                        },
+                    )
+                }
+                Node {
+                    node: Block { expressions },
+                    span,
+                } => {
+                    let exprs = expressions
+                        .into_iter()
+                        .map(|x| self.visit(x))
+                        .collect::<Vec<Node>>();
+                    Node::new(span, NodeType::block(exprs))
+                }
                 x => x,
             }
         }
@@ -86,9 +120,9 @@ impl Node {
             Expression { expression } => expression.execute(),
             Block { expressions } => {
                 if let Some(last_node) = expressions.into_iter().map(Node::execute).last() {
-                    new_node(NodeType::expression(last_node))
+                    new_node(NodeType::expression(last_node)).execute()
                 } else {
-                    new_node(NodeType::Empty)
+                    new_node(NodeType::Empty).execute()
                 }
             }
             If {
@@ -101,18 +135,26 @@ impl Node {
                 if_true,
                 if_false,
             } => {
-                if condition.execute().node == NodeType::BoolLiteral(true) {
-                    if let Some(if_true) = if_true {
-                        if_true.execute()
-                    } else {
-                        new_node(NodeType::Empty)
+                let condition = condition.execute().node;
+                match condition {
+                    NodeType::BoolLiteral(true) => {
+                        if let Some(if_true) = if_true {
+                            if_true.execute()
+                        } else {
+                            new_node(NodeType::Empty)
+                        }
                     }
-                } else {
-                    if let Some(if_false) = if_false {
-                        if_false.execute()
-                    } else {
-                        new_node(NodeType::Empty)
+                    NodeType::BoolLiteral(false) => {
+                        if let Some(if_false) = if_false {
+                            if_false.execute()
+                        } else {
+                            new_node(NodeType::Empty)
+                        }
                     }
+                    n => new_node(NodeType::Error(format!(
+                        "Expected boolean value, got {:?}.",
+                        n
+                    ))),
                 }
             }
             _ => self,

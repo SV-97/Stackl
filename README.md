@@ -48,7 +48,7 @@ block :=
     Colon expression+ End.
 
 ifExpr :=
-    If expression block.
+    If expression Colon expression+ (End | (Else block)).
 
 parenthesizedExpr :=
     LPar expression RPar.

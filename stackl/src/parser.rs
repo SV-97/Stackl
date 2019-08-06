@@ -206,6 +206,27 @@ impl Parser {
             None
         }
     }
+
+    /// Match a function multiple zero or more times like `a*`
+    fn zero_or_more(&mut self, f: impl Fn(&mut Self) -> ParseResult) -> Vec<Node> {
+        let mut nodes = Vec::new();
+        while let Ok(node) = f(self) {
+            nodes.push(node);
+        }
+        nodes
+    }
+
+    /// Match a function one ore more times like `a+`
+    fn one_or_more(
+        &mut self,
+        f: impl Fn(&mut Self) -> ParseResult,
+    ) -> Result<Vec<Node>, ErrorRecord> {
+        let mut nodes = vec![f(self)?];
+        while let Ok(node) = f(self) {
+            nodes.push(node);
+        }
+        Ok(nodes)
+    }
 }
 
 impl Parser {
@@ -375,19 +396,55 @@ impl Parser {
         let if_tok = self.take_token()?;
         self.advance();
         let condition = self.expression()?;
-        let block = self.block()?;
-        let span = Span::between(&if_tok.span, &block.span());
-        let node = Node::new(span, NodeType::if_expression(condition, Some(block), None));
-        Ok(node)
+        let colon = self.take_token()?;
+        self.advance();
+        match colon {
+            Token {
+                ttype: Tok::Colon,
+                span,
+            } => {
+                let true_exprs = self.zero_or_more(Self::expression);
+                let true_span = Span::between(&span, true_exprs.last().map_or(&span, |n| &n.span));
+                let true_block = Node::new(true_span, NodeType::block(true_exprs));
+                let end_or_else = self.take_token()?;
+                self.advance();
+                match end_or_else {
+                    Token {
+                        ttype: Tok::Else,
+                        span,
+                    } => {
+                        let false_block = self.block()?;
+                        let span = Span::between(&if_tok.span, &span);
+                        let node = Node::new(
+                            span,
+                            NodeType::if_expression(condition, Some(true_block), Some(false_block)),
+                        );
+                        Ok(node)
+                    }
+                    Token {
+                        ttype: Tok::End,
+                        span,
+                    } => {
+                        let mut true_block = true_block;
+                        true_block.span = Span::between(&true_block.span, &span);
+                        let span = Span::between(&if_tok.span, &span);
+                        let node = Node::new(
+                            span,
+                            NodeType::if_expression(condition, Some(true_block), None),
+                        );
+                        Ok(node)
+                    }
+                    t => unexpected(Tok::End, t),
+                }
+            }
+            t => unexpected(Tok::Colon, t),
+        }
     }
 
     fn block(&mut self) -> ParseResult {
         let colon = self.take_token()?;
         self.advance();
-        let mut expressions = Vec::new();
-        while let Ok(expression) = self.expression() {
-            expressions.push(expression);
-        }
+        let expressions = self.zero_or_more(Self::expression);
         let token = self.take_token()?;
         self.advance();
         match token {

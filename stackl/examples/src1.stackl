@@ -1,6 +1,6 @@
 abcd=5.0
 b = 1.0
-if abcd + b >= 3:
+if abcd + b >= 3 do
     print(a)
 end
 
@@ -11,7 +11,7 @@ d = 1.5.6
 e = 1.5e5
 f = 1ee7
 
-if not abcd != b:
+if not abcd != b do
     print(b)
 end
 

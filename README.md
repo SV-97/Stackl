@@ -45,10 +45,10 @@ primaryExpr :=
     | literal.
 
 block :=
-    Colon expression+ End.
+    Do expression+ End.
 
 ifExpr :=
-    If expression Colon expression+ (End | (Else block)).
+    If expression Do expression+ (End | (Else block)).
 
 parenthesizedExpr :=
     LPar expression RPar.

@@ -334,7 +334,7 @@ impl Parser {
                 self.if_expression()
             }
             tok @ Token {
-                ttype: Tok::Colon, ..
+                ttype: Tok::Do, ..
             } => {
                 self.put_back(tok);
                 self.block()
@@ -396,11 +396,11 @@ impl Parser {
         let if_tok = self.take_token()?;
         self.advance();
         let condition = self.expression()?;
-        let colon = self.take_token()?;
+        let do_tok = self.take_token()?;
         self.advance();
-        match colon {
+        match do_tok {
             Token {
-                ttype: Tok::Colon,
+                ttype: Tok::Do,
                 span,
             } => {
                 let true_exprs = self.zero_or_more(Self::expression);
@@ -437,12 +437,12 @@ impl Parser {
                     t => unexpected(Tok::End, t),
                 }
             }
-            t => unexpected(Tok::Colon, t),
+            t => unexpected(Tok::Do, t),
         }
     }
 
     fn block(&mut self) -> ParseResult {
-        let colon = self.take_token()?;
+        let do_tok = self.take_token()?;
         self.advance();
         let expressions = self.zero_or_more(Self::expression);
         let token = self.take_token()?;
@@ -452,7 +452,7 @@ impl Parser {
                 ttype: Tok::End,
                 span: end_span,
             } => {
-                let span = Span::between(&colon.span, &end_span);
+                let span = Span::between(&do_tok.span, &end_span);
                 let node = Node::new(span, NodeType::block(expressions));
                 Ok(node)
             }

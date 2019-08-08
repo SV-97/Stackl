@@ -1,14 +1,14 @@
 a = 5.0 + 10
 b = 1.0
-if abcd + b >= 3:
+if abcd + b >= 3 do
     print(a)
     # if b ! true:
     #    b = 5.0
     # end
-else:
-    if true:
+else do
+    if true do
         420
-    else: 
+    else do
         69
     end
 end

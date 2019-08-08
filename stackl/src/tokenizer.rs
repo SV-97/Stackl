@@ -46,7 +46,7 @@ pub enum Tok {
     GreatOrEq, // >=
 
     Indent(usize),
-    Colon,
+    Do,
     Error,
 }
 
@@ -96,7 +96,6 @@ impl Iterator for Tokenizer {
         if let Some(current_char) = self.current_char {
             match current_char {
                 '"' => Some(self.string()),
-                ':' => Some(self.colon()),
                 '!' => Some(self.not_equal()),
                 '=' if self.peek() == Some('=') => Some(self.equal()),
                 '=' => Some(self.assign()),
@@ -270,10 +269,6 @@ impl Tokenizer {
         let span = self.span(text.len());
         self.advance();
         Token::new(ttype, span)
-    }
-
-    fn colon(&mut self) -> Token {
-        self.simple(Tok::Colon, ":")
     }
 
     fn assign(&mut self) -> Token {
@@ -471,6 +466,7 @@ impl Tokenizer {
             "or" => Token::new(Tok::Or, span),
             "let" => Token::new(Tok::Let, span),
             "mut" => Token::new(Tok::Mut, span),
+            "do" => Token::new(Tok::Do, span),
             _ => Token::new(Tok::Identifier, span),
         }
     }

@@ -1,32 +1,32 @@
 let abcd = 5.0
 mut b = 1.0
 
-if abcd + b >= 3:
+if abcd + b >= 3 do
     print(a)
 end
 
-b = :
+b = do
     abcd -= 2
     1 + 2
 end # assign 3.0 to b
 
-if not abcd != b:
+if not abcd != b do
     print(b)
 end
 
-def f(x):
+def f(x) do # maybe colon for this?
     print(abcd + b)
     let c = 3
 end
 
-enum A:
+enum A do
     A(x, y, z)
 end
 
 # weird cases
 
 mut a = 1.0
-a -= : b += 5 end
+a -= do b += 5 end
 
 ### This is a multiline comment
 Ayow you wanker

@@ -1,11 +1,11 @@
-3 + 5 - if true : 3 * 2 else : 5 * 5 / 5 end
-3 + 5 - if false : 3 * 2 else : 5 * 5 / 5 end
+3 + 5 - if true do 3 * 2 else do 5 * 5 / 5 end
+3 + 5 - if false do 3 * 2 else do 5 * 5 / 5 end
 3 + 5 -
-    if :
+    if do
         a = 3 + 5 * 10 -10
         3 < 5 
-    end :
+    end do
         3 * 2
-    else :
+    else do
         5
     end

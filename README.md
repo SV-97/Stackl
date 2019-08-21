@@ -1,6 +1,6 @@
 # Stackl
 
-Small stack based language
+Small stack based language. Unfinished (stopped after implementing constant folding).
 
 ## Grammar
 
@@ -98,20 +98,20 @@ From strong to weak
 let abcd = 5.0
 mut b = 1.0
 
-if abcd + b >= 3:
+if abcd + b >= 3 do
     print(a)
 end
 
-b = :
+b = do
     abcd -= 2
     1 + 2
 end # assign 3.0 to b
 
-if not abcd != b:
+if not abcd != b do
     print(b)
 end
 
-def f(x):
+def f(x) do
     print(abcd + b)
     let c = 3
 end
